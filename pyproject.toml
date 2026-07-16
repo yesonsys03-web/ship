@@ -1,0 +1,9 @@
+[project]
+name = "ship-suite"
+version = "0.1.0"
+description = "Prototype shipment sender and manager backends for Tauri desktop apps"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+pythonpath = ["python"]
+testpaths = ["tests/python"]

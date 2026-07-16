@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ShipmentManifest",
+  "type": "object",
+  "required": ["id", "source_path", "folder_name", "created_at", "files"],
+  "properties": {
+    "id": { "type": "string" },
+    "source_path": { "type": "string" },
+    "folder_name": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "note": { "type": "string" },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "size", "is_dir"],
+        "properties": {
+          "path": { "type": "string" },
+          "size": { "type": "integer", "minimum": 0 },
+          "is_dir": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

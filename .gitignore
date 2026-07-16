@@ -1,0 +1,68 @@
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+.venv/
+.venv*/
+venv/
+
+# Python caches and build output
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.egg-info/
+
+# Node/Vite output
+node_modules/
+apps/*/node_modules/
+apps/*/dist/
+
+# Rust/Tauri generated output
+apps/*/src-tauri/target/
+apps/*/src-tauri/binaries/
+apps/*/src-tauri/gen/
+
+# Local build/release artifacts
+build/
+release/
+dist/
+*.app/
+*.dmg
+*.pkg
+*.zip
+*.tar.gz
+*.exe
+*.msi
+*.msix
+*.sig
+*.sha256
+
+# Local runtime data
+logs/
+data/
+.omo/
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Keys/certificates should never be committed
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt

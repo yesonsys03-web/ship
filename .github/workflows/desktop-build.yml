@@ -1,0 +1,72 @@
+name: Desktop Builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  macos-universal:
+    name: macOS universal apps
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - name: Build macOS apps
+        run: SHIP_MACOS_BUILD_MODE=universal MACOSX_DEPLOYMENT_TARGET=12.0 ./scripts/build_apps_py312.sh
+      - name: Verify code signatures
+        run: |
+          codesign --verify --deep --strict "release/선적전송.app"
+          codesign --verify --deep --strict "release/선적관리.app"
+          codesign --verify --deep --strict "release/전송로그.app"
+      - name: Package macOS apps
+        run: |
+          mkdir -p artifacts/macos
+          ditto -c -k --sequesterRsrc --keepParent "release/선적전송.app" "artifacts/macos/선적전송-macos12-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent "release/선적관리.app" "artifacts/macos/선적관리-macos12-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent "release/전송로그.app" "artifacts/macos/전송로그-macos12-universal.zip"
+          shasum -a 256 artifacts/macos/*.zip > artifacts/macos/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal-apps
+          path: artifacts/macos/*
+
+  windows-x64:
+    name: Windows x64 installers
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Build Windows installers
+        shell: pwsh
+        run: .\scripts\build_apps_windows.ps1 -Python python -Target x86_64-pc-windows-msvc
+      - name: Checksum Windows installers
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts\windows | Out-Null
+          Copy-Item release-windows\*.exe artifacts\windows\
+          Get-ChildItem artifacts\windows\*.exe | ForEach-Object {
+            $hash = Get-FileHash $_.FullName -Algorithm SHA256
+            "$($hash.Hash)  $($_.Name)"
+          } | Set-Content artifacts\windows\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-installers
+          path: artifacts/windows/*

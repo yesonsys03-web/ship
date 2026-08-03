@@ -48,6 +48,7 @@ function New-SidecarBinary {
     & $VenvDir\Scripts\python.exe -m PyInstaller `
         --clean `
         --onefile `
+        --noconsole `
         --name $AppName `
         --paths (Join-Path $RootDir "python") `
         --distpath $distPath `

@@ -41,9 +41,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/macos-universal
-          hdiutil create -volname "선적전송" -srcfolder "release/선적전송.app" -ov -format UDZO "artifacts/macos-universal/선적전송-macos12-universal.dmg"
-          hdiutil create -volname "선적관리" -srcfolder "release/선적관리.app" -ov -format UDZO "artifacts/macos-universal/선적관리-macos12-universal.dmg"
-          hdiutil create -volname "전송로그" -srcfolder "release/전송로그.app" -ov -format UDZO "artifacts/macos-universal/전송로그-macos12-universal.dmg"
+          ./scripts/create_dmg.sh "release/선적전송.app" "artifacts/macos-universal/선적전송-macos12-universal.dmg" "선적전송"
+          ./scripts/create_dmg.sh "release/선적관리.app" "artifacts/macos-universal/선적관리-macos12-universal.dmg" "선적관리"
+          ./scripts/create_dmg.sh "release/전송로그.app" "artifacts/macos-universal/전송로그-macos12-universal.dmg" "전송로그"
           shasum -a 256 artifacts/macos-universal/*.dmg > artifacts/macos-universal/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -96,9 +96,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/macos-arm64
-          hdiutil create -volname "선적전송" -srcfolder "release/선적전송.app" -ov -format UDZO "artifacts/macos-arm64/선적전송-macos12-arm64.dmg"
-          hdiutil create -volname "선적관리" -srcfolder "release/선적관리.app" -ov -format UDZO "artifacts/macos-arm64/선적관리-macos12-arm64.dmg"
-          hdiutil create -volname "전송로그" -srcfolder "release/전송로그.app" -ov -format UDZO "artifacts/macos-arm64/전송로그-macos12-arm64.dmg"
+          ./scripts/create_dmg.sh "release/선적전송.app" "artifacts/macos-arm64/선적전송-macos12-arm64.dmg" "선적전송"
+          ./scripts/create_dmg.sh "release/선적관리.app" "artifacts/macos-arm64/선적관리-macos12-arm64.dmg" "선적관리"
+          ./scripts/create_dmg.sh "release/전송로그.app" "artifacts/macos-arm64/전송로그-macos12-arm64.dmg" "전송로그"
           shasum -a 256 artifacts/macos-arm64/*.dmg > artifacts/macos-arm64/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:

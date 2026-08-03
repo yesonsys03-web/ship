@@ -7,6 +7,7 @@ from typing import Iterable
 
 SHIP_DB_FILENAME = "shipments.sqlite3"
 WINDOWS_SHIP_DB_DIR_CANDIDATES = (
+    Path("//Mserver/USA_DB/test_jn/ship_db"),
     Path(r"\\Mserver\USA_DB\test_jn\ship_db"),
 )
 POSIX_SHIP_DB_DIR_CANDIDATES = (

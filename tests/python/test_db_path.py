@@ -17,7 +17,14 @@ def test_default_ship_db_candidates_match_approved_mount_paths() -> None:
 
 
 def test_windows_ship_db_candidate_uses_unc_path() -> None:
-    assert WINDOWS_SHIP_DB_DIR_CANDIDATES == (Path(r"\\Mserver\USA_DB\test_jn\ship_db"),)
+    assert WINDOWS_SHIP_DB_DIR_CANDIDATES == (
+        Path("//Mserver/USA_DB/test_jn/ship_db"),
+        Path(r"\\Mserver\USA_DB\test_jn\ship_db"),
+    )
+
+
+def test_windows_ship_db_candidate_prefers_forward_slash_unc_path() -> None:
+    assert WINDOWS_SHIP_DB_DIR_CANDIDATES[0] == Path("//Mserver/USA_DB/test_jn/ship_db")
 
 
 def test_resolve_ship_db_file_uses_env_directory(monkeypatch, tmp_path: Path) -> None:

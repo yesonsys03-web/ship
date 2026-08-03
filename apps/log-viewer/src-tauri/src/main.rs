@@ -7,14 +7,15 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 const SHIP_DB_FILENAME: &str = "shipments.sqlite3";
-#[cfg(windows)]
-const SHIP_DB_DIR_CANDIDATES: [&str; 5] = [
+const WINDOWS_SHIP_DB_DIR_CANDIDATES: [&str; 5] = [
+    "//Mserver/USA_DB/test_jn/ship_db",
     "\\\\Mserver\\USA_DB\\test_jn\\ship_db",
     "/System/Volumes/Data/USA_DB/test_jn/ship_db",
     "/USA_DB/test_jn/ship_db",
-    "//Mserver/USA_DB/test_jn/ship_db",
     "/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db",
 ];
+#[cfg(windows)]
+const SHIP_DB_DIR_CANDIDATES: [&str; 5] = WINDOWS_SHIP_DB_DIR_CANDIDATES;
 #[cfg(not(windows))]
 const SHIP_DB_DIR_CANDIDATES: [&str; 4] = [
     "/System/Volumes/Data/USA_DB/test_jn/ship_db",
@@ -672,6 +673,15 @@ mod tests {
 
         fs::remove_dir_all(first).expect("first temp dir should be removed");
         fs::remove_dir_all(second).expect("second temp dir should be removed");
+    }
+
+    #[test]
+    fn windows_candidates_prefer_forward_slash_unc_path() {
+        assert_eq!(
+            WINDOWS_SHIP_DB_DIR_CANDIDATES[0],
+            "//Mserver/USA_DB/test_jn/ship_db"
+        );
+        assert!(WINDOWS_SHIP_DB_DIR_CANDIDATES.contains(&"\\\\Mserver\\USA_DB\\test_jn\\ship_db"));
     }
 
     #[test]

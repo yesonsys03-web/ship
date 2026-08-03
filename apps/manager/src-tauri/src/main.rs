@@ -7,8 +7,17 @@ use tauri::Manager;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-#[cfg(windows)]
-const WINDOWS_SHIP_DB_DIR: &str = "\\\\Mserver\\USA_DB\\test_jn\\ship_db";
+const WINDOWS_SHIP_DB_DIR: &str = "//Mserver/USA_DB/test_jn/ship_db";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn windows_sidecar_db_dir_uses_forward_slash_unc_path() {
+        assert_eq!(WINDOWS_SHIP_DB_DIR, "//Mserver/USA_DB/test_jn/ship_db");
+    }
+}
 
 struct BackendState(Mutex<Option<CommandChild>>);
 

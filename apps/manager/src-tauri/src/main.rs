@@ -7,6 +7,9 @@ use tauri::Manager;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+#[cfg(windows)]
+const WINDOWS_SHIP_DB_DIR: &str = "\\\\Mserver\\USA_DB\\test_jn\\ship_db";
+
 struct BackendState(Mutex<Option<CommandChild>>);
 
 fn stop_backend(app: &tauri::AppHandle) {
@@ -29,11 +32,15 @@ fn request_backend_shutdown(port: u16) {
 }
 
 fn spawn_backend(app: tauri::AppHandle) -> Result<(), String> {
-    let (mut rx, child) = app
+    let command = app
         .shell()
         .sidecar("ship-manager-backend")
         .map_err(|error| format!("선적관리 백엔드 실행 파일을 찾지 못했습니다: {error}"))?
-        .args(["--parent-pid".to_string(), std::process::id().to_string()])
+        .args(["--parent-pid".to_string(), std::process::id().to_string()]);
+    #[cfg(windows)]
+    let command = command.env("SHIP_DB_DIR", WINDOWS_SHIP_DB_DIR);
+
+    let (mut rx, child) = command
         .spawn()
         .map_err(|error| format!("선적관리 백엔드를 시작하지 못했습니다: {error}"))?;
     *app.state::<BackendState>()

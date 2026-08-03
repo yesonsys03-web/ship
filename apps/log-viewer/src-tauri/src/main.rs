@@ -7,6 +7,15 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 const SHIP_DB_FILENAME: &str = "shipments.sqlite3";
+#[cfg(windows)]
+const SHIP_DB_DIR_CANDIDATES: [&str; 5] = [
+    "\\\\Mserver\\USA_DB\\test_jn\\ship_db",
+    "/System/Volumes/Data/USA_DB/test_jn/ship_db",
+    "/USA_DB/test_jn/ship_db",
+    "//Mserver/USA_DB/test_jn/ship_db",
+    "/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db",
+];
+#[cfg(not(windows))]
 const SHIP_DB_DIR_CANDIDATES: [&str; 4] = [
     "/System/Volumes/Data/USA_DB/test_jn/ship_db",
     "/USA_DB/test_jn/ship_db",

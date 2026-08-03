@@ -26,7 +26,6 @@ def resolve_ship_db_file(candidates: Iterable[Path] = SHIP_DB_DIR_CANDIDATES) ->
     env_dir = os.getenv("SHIP_DB_DIR")
     if env_dir:
         directory = Path(env_dir).expanduser()
-        directory.mkdir(parents=True, exist_ok=True)
         return directory / SHIP_DB_FILENAME
 
     existing_directories: list[Path] = []

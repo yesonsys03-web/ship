@@ -27,7 +27,7 @@ def test_resolve_ship_db_file_uses_env_directory(monkeypatch, tmp_path: Path) ->
     db_file = resolve_ship_db_file()
 
     assert db_file == db_dir / "shipments.sqlite3"
-    assert db_dir.exists()
+    assert not db_dir.exists()
 
 
 def test_resolve_ship_db_file_uses_first_existing_candidate(monkeypatch, tmp_path: Path) -> None:

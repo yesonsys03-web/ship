@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import sqlite3
+
+import pytest
 
 from ship_common.models import FileEntry, ShipmentManifest
+from ship_common import shipment_db
 from ship_manager.storage import ShipmentStorage
 
 
@@ -113,3 +117,35 @@ def test_storage_summary_content_signature_ignores_sent_at_and_tracks_manifest_c
 
     assert first_signature == second_signature
     assert changed_signature != first_signature
+
+
+def test_storage_read_paths_do_not_ensure_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+    storage = ShipmentStorage(tmp_path, db_file=db_file)
+    monkeypatch.setattr(
+        shipment_db,
+        "_ensure_schema",
+        lambda connection: (_ for _ in ()).throw(AssertionError("read ensured schema")),
+    )
+
+    assert storage.list_tree() == {"years": []}
+    with pytest.raises(FileNotFoundError):
+        storage.load("missing-shipment")
+
+
+def test_storage_list_tree_returns_empty_when_shipments_table_is_missing(tmp_path: Path) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+    storage = ShipmentStorage(tmp_path, db_file=db_file)
+
+    assert storage.list_tree() == {"years": []}
+
+
+def test_storage_load_raises_not_found_when_shipments_table_is_missing(tmp_path: Path) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+    storage = ShipmentStorage(tmp_path, db_file=db_file)
+
+    with pytest.raises(FileNotFoundError):
+        storage.load("missing-shipment")

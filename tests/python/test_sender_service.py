@@ -1,10 +1,12 @@
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from ship_common import audit_log
+from ship_common import shipment_db
 from ship_common.db_path import SHIP_DB_FILENAME, resolve_ship_db_file
 from ship_common.models import FileEntry, ShipmentManifest
 from ship_sender import service
@@ -191,6 +193,31 @@ def test_sent_history_returns_empty_when_shared_db_is_missing(monkeypatch, tmp_p
 
     assert history == []
     assert not (tmp_path / "shipments.sqlite3").exists()
+
+
+def test_sent_history_does_not_ensure_schema(monkeypatch, tmp_path: Path) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    db_file.write_bytes(b"")
+    monkeypatch.setenv("SHIP_DB_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        shipment_db,
+        "_ensure_schema",
+        lambda connection: (_ for _ in ()).throw(AssertionError("history ensured schema")),
+    )
+
+    history = service.sent_history()
+
+    assert history == []
+
+
+def test_sent_history_returns_empty_when_shipments_table_is_missing(monkeypatch, tmp_path: Path) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+    monkeypatch.setenv("SHIP_DB_DIR", str(tmp_path))
+
+    history = service.sent_history()
+
+    assert history == []
 
 
 def test_ready_endpoint_does_not_touch_shared_db(monkeypatch) -> None:

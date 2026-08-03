@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -102,3 +103,23 @@ def test_database_does_not_force_wal_journal_mode(tmp_path: Path) -> None:
         journal_mode = connection.execute("pragma journal_mode").fetchone()[0]
 
     assert journal_mode != "wal"
+
+
+def test_read_thumbnail_does_not_ensure_schema(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+    database = ShipmentDatabase(db_file)
+    monkeypatch.setattr(
+        shipment_db,
+        "_ensure_schema",
+        lambda connection: (_ for _ in ()).throw(AssertionError("thumbnail read ensured schema")),
+    )
+
+    assert database.get_thumbnail_bytes("shipment-1", "poster.jpg") is None
+
+
+def test_read_thumbnail_returns_none_when_thumbnail_table_is_missing(tmp_path: Path) -> None:
+    db_file = tmp_path / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+
+    assert ShipmentDatabase(db_file).get_thumbnail_bytes("shipment-1", "poster.jpg") is None

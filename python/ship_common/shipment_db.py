@@ -13,6 +13,10 @@ from .thumbnails import PNG_SIGNATURE, THUMBNAIL_EXTENSIONS, get_thumbnail_bytes
 
 
 MAX_THUMBNAIL_ERROR_SAMPLES = 5
+READ_SQLITE_TIMEOUT_SECONDS = 1
+READ_SQLITE_BUSY_TIMEOUT_MS = 1000
+WRITE_SQLITE_TIMEOUT_SECONDS = 10
+WRITE_SQLITE_BUSY_TIMEOUT_MS = 5000
 
 
 def _is_valid_date(year: int, month: int, day: int) -> bool:
@@ -169,8 +173,9 @@ class ShipmentDatabase:
         if not self.db_file.exists():
             return []
 
-        with self._connect() as connection:
-            _ensure_schema(connection)
+        with self._connect(read_only=True) as connection:
+            if not _table_exists(connection, "shipments"):
+                return []
             rows = connection.execute(
                 """
                 select manifest_json
@@ -185,8 +190,9 @@ class ShipmentDatabase:
         if not self.db_file.exists():
             return {"years": []}
 
-        with self._connect() as connection:
-            _ensure_schema(connection)
+        with self._connect(read_only=True) as connection:
+            if not _table_exists(connection, "shipments"):
+                return {"years": []}
             rows = connection.execute(
                 """
                 select id, folder_name, created_at, year, month, day, file_count, manifest_json
@@ -234,8 +240,9 @@ class ShipmentDatabase:
         if not self.db_file.exists():
             raise FileNotFoundError(shipment_id)
 
-        with self._connect() as connection:
-            _ensure_schema(connection)
+        with self._connect(read_only=True) as connection:
+            if not _table_exists(connection, "shipments"):
+                raise FileNotFoundError(shipment_id)
             row = connection.execute("select manifest_json from shipments where id = ?", (shipment_id,)).fetchone()
         if row is None:
             raise FileNotFoundError(shipment_id)
@@ -245,8 +252,9 @@ class ShipmentDatabase:
         if not self.db_file.exists():
             return None
 
-        with self._connect() as connection:
-            _ensure_schema(connection)
+        with self._connect(read_only=True) as connection:
+            if not _table_exists(connection, "shipment_thumbnails"):
+                return None
             row = connection.execute(
                 """
                 select png_bytes
@@ -290,10 +298,14 @@ class ShipmentDatabase:
             ],
         )
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_file, timeout=10)
+    def _connect(self, *, read_only: bool = False) -> sqlite3.Connection:
+        timeout = READ_SQLITE_TIMEOUT_SECONDS if read_only else WRITE_SQLITE_TIMEOUT_SECONDS
+        busy_timeout = READ_SQLITE_BUSY_TIMEOUT_MS if read_only else WRITE_SQLITE_BUSY_TIMEOUT_MS
+        connection = sqlite3.connect(self.db_file, timeout=timeout)
         connection.row_factory = sqlite3.Row
-        connection.execute("pragma busy_timeout = 5000")
+        connection.execute(f"pragma busy_timeout = {busy_timeout}")
+        if read_only:
+            connection.execute("pragma query_only = on")
         return connection
 
 
@@ -328,6 +340,14 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
         """
     )
     connection.execute("create index if not exists idx_shipment_thumbnails_shipment on shipment_thumbnails(shipment_id)")
+
+
+def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
+    row = connection.execute(
+        "select 1 from sqlite_master where type = 'table' and name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
 
 
 def _is_previewable_file(entry: Any) -> bool:

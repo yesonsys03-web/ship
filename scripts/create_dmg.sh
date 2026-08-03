@@ -30,9 +30,25 @@ BACKGROUND_PNG="$BACKGROUND_DIR/background.png"
 LAYOUT_SCRIPT="$TMP_DIR/layout.applescript"
 DETACHED=1
 
+detach_mount() {
+  local mount_path="$1"
+  local attempt
+
+  for attempt in 1 2 3 4 5; do
+    if hdiutil detach "$mount_path" -quiet; then
+      return 0
+    fi
+    sync
+    sleep "$attempt"
+  done
+
+  printf 'Mount still busy after retries, forcing detach: %s\n' "$mount_path" >&2
+  hdiutil detach "$mount_path" -quiet -force
+}
+
 cleanup() {
   if [ "$DETACHED" -eq 0 ]; then
-    hdiutil detach "$MOUNT_DIR" -quiet || true
+    detach_mount "$MOUNT_DIR" || true
   fi
   rm -rf "$TMP_DIR"
 }
@@ -168,7 +184,7 @@ APPLESCRIPT
 osascript "$LAYOUT_SCRIPT" "$MOUNT_DIR" "$APP_NAME" >/dev/null
 sync
 sleep 2
-hdiutil detach "$MOUNT_DIR" -quiet
+detach_mount "$MOUNT_DIR"
 DETACHED=1
 
 rm -f "$OUTPUT_DMG"

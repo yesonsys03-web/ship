@@ -7,7 +7,11 @@ from types import SimpleNamespace
 import pytest
 
 from ship_sender import server as sender_server
-from ship_sender.bobs_catalog import bobs_catalog_job, bobs_catalog_jobs, read_scene_names, sequences_for_scenes
+from ship_sender.bobs_catalog import BOBS_CATALOG_ROOTS, bobs_catalog_job, bobs_catalog_jobs, read_scene_names, sequences_for_scenes
+
+
+def test_bobs_catalog_roots_include_windows_network_share() -> None:
+    assert Path("//Mserver/USA_DB") in BOBS_CATALOG_ROOTS
 
 
 def test_bobs_catalog_jobs_uses_first_available_root_and_filters_sorted_jobs(tmp_path: Path) -> None:

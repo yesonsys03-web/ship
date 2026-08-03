@@ -7,6 +7,7 @@ def test_default_ship_db_candidates_match_approved_mount_paths() -> None:
     assert SHIP_DB_DIR_CANDIDATES == (
         Path("/System/Volumes/Data/USA_DB/test_jn/ship_db"),
         Path("/USA_DB/test_jn/ship_db"),
+        Path("//Mserver/USA_DB/test_jn/ship_db"),
         Path("/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db"),
     )
 

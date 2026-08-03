@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, List, Tuple
 BOBS_ENVIRONMENT = "Bobs_Burgers"
 BOBS_CATALOG_ROOTS = (
     Path("/USA_DB"),
+    Path("//Mserver/USA_DB"),
     Path("/System/Volumes/Data/mnt/USA_DB"),
 )
 BOBS_JOB_PREFIXES = ("FA", "GA", "HA")

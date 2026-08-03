@@ -28,36 +28,44 @@ fn request_backend_shutdown(port: u16) {
     }
 }
 
+fn spawn_backend(app: tauri::AppHandle) -> Result<(), String> {
+    let (mut rx, child) = app
+        .shell()
+        .sidecar("ship-manager-backend")
+        .map_err(|error| format!("선적관리 백엔드 실행 파일을 찾지 못했습니다: {error}"))?
+        .args(["--parent-pid".to_string(), std::process::id().to_string()])
+        .spawn()
+        .map_err(|error| format!("선적관리 백엔드를 시작하지 못했습니다: {error}"))?;
+    *app.state::<BackendState>()
+        .0
+        .lock()
+        .expect("backend state lock failed") = Some(child);
+
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            match event {
+                CommandEvent::Stdout(line) => println!("{}", String::from_utf8_lossy(&line)),
+                CommandEvent::Stderr(line) => eprintln!("{}", String::from_utf8_lossy(&line)),
+                _ => {}
+            }
+        }
+    });
+
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .manage(BackendState(Mutex::new(None)))
         .setup(|app| {
-            let (mut rx, child) = app
-                .shell()
-                .sidecar("ship-manager-backend")?
-                .args(["--parent-pid".to_string(), std::process::id().to_string()])
-                .spawn()?;
-            *app.state::<BackendState>()
-                .0
-                .lock()
-                .expect("backend state lock failed") = Some(child);
-
-            tauri::async_runtime::spawn(async move {
-                while let Some(event) = rx.recv().await {
-                    match event {
-                        CommandEvent::Stdout(line) => {
-                            println!("{}", String::from_utf8_lossy(&line))
-                        }
-                        CommandEvent::Stderr(line) => {
-                            eprintln!("{}", String::from_utf8_lossy(&line))
-                        }
-                        _ => {}
-                    }
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Err(error) = spawn_backend(app_handle) {
+                    eprintln!("{error}");
                 }
             });
-
             Ok(())
         })
         .build(tauri::generate_context!())

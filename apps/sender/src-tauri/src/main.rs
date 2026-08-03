@@ -498,9 +498,12 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .manage(BackendState(Mutex::new(BackendProcess::default())))
         .setup(|app| {
-            if let Err(error) = ensure_backend(app.handle()) {
-                eprintln!("{error}");
-            }
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Err(error) = ensure_backend(&app_handle) {
+                    eprintln!("{error}");
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

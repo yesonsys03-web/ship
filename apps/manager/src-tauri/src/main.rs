@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::io::Write;
 use std::net::TcpStream;
 use std::sync::Mutex;
@@ -21,7 +23,8 @@ fn stop_backend(app: &tauri::AppHandle) {
 
 fn request_backend_shutdown(port: u16) {
     if let Ok(mut stream) = TcpStream::connect(("127.0.0.1", port)) {
-        let _ = stream.write_all(b"GET /shutdown HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+        let _ = stream
+            .write_all(b"GET /shutdown HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
     }
 }
 
@@ -36,13 +39,20 @@ fn main() {
                 .sidecar("ship-manager-backend")?
                 .args(["--parent-pid".to_string(), std::process::id().to_string()])
                 .spawn()?;
-            *app.state::<BackendState>().0.lock().expect("backend state lock failed") = Some(child);
+            *app.state::<BackendState>()
+                .0
+                .lock()
+                .expect("backend state lock failed") = Some(child);
 
             tauri::async_runtime::spawn(async move {
                 while let Some(event) = rx.recv().await {
                     match event {
-                        CommandEvent::Stdout(line) => println!("{}", String::from_utf8_lossy(&line)),
-                        CommandEvent::Stderr(line) => eprintln!("{}", String::from_utf8_lossy(&line)),
+                        CommandEvent::Stdout(line) => {
+                            println!("{}", String::from_utf8_lossy(&line))
+                        }
+                        CommandEvent::Stderr(line) => {
+                            eprintln!("{}", String::from_utf8_lossy(&line))
+                        }
                         _ => {}
                     }
                 }
@@ -52,10 +62,10 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("failed to build manager app")
-        .run(|app_handle, event| {
-            match event {
-                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => stop_backend(app_handle),
-                _ => {}
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                stop_backend(app_handle)
             }
+            _ => {}
         });
 }

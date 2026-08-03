@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::io::{Read, Write};
@@ -265,7 +267,10 @@ fn record_backend_event(app: &tauri::AppHandle, generation: u64, event: CommandE
                 backend.child = None;
                 backend.port = None;
             } else {
-                push_log_line(&mut backend.stderr, format!("stale sidecar event ignored: {text}"));
+                push_log_line(
+                    &mut backend.stderr,
+                    format!("stale sidecar event ignored: {text}"),
+                );
             }
         }
         _ => {}

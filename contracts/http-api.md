@@ -19,7 +19,8 @@ Response: shipment manifest draft with `files` populated from the folder.
 Request: shipment manifest. The sender backend writes it to the shared SQLite DB selected from these directories, preferring the first candidate that already contains `shipments.sqlite3`:
 
 1. `/USA_DB/test_jn/ship_db`
-2. `/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db`
+2. `//Mserver/USA_DB/test_jn/ship_db`
+3. `/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db`
 
 The DB file name is `shipments.sqlite3`. `SHIP_DB_DIR` can override the directory for development/testing.
 

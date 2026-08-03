@@ -752,4 +752,4 @@ if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
 else
   printf -- '- Native mode is intentionally thin. If the final app reports x86_64-only, keep it as an x86_64/Rosetta package or rebuild with SHIP_MACOS_BUILD_MODE=universal before shipping to macOS 12 Silicon Macs.\n'
 fi
-printf -- '- Sender DB lookup includes /System/Volumes/Data/USA_DB, /USA_DB, and /System/Volumes/Data/mnt/USA_DB paths; /health reports the exact DB path used.\n'
+printf -- '- Sender DB lookup includes /System/Volumes/Data/USA_DB, /USA_DB, //Mserver/USA_DB, and /System/Volumes/Data/mnt/USA_DB paths; /health reports the exact DB path used.\n'

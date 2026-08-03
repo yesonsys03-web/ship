@@ -41,9 +41,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/macos-universal
-          ./scripts/create_dmg.sh "release/선적전송.app" "artifacts/macos-universal/선적전송-macos12-universal.dmg" "선적전송"
-          ./scripts/create_dmg.sh "release/선적관리.app" "artifacts/macos-universal/선적관리-macos12-universal.dmg" "선적관리"
-          ./scripts/create_dmg.sh "release/전송로그.app" "artifacts/macos-universal/전송로그-macos12-universal.dmg" "전송로그"
+          ./scripts/create_dmg.sh "release/선적전송.app" "artifacts/macos-universal/ship-sender-macos12-universal.dmg" "선적전송"
+          ./scripts/create_dmg.sh "release/선적관리.app" "artifacts/macos-universal/ship-manager-macos12-universal.dmg" "선적관리"
+          ./scripts/create_dmg.sh "release/전송로그.app" "artifacts/macos-universal/ship-log-viewer-macos12-universal.dmg" "전송로그"
           shasum -a 256 artifacts/macos-universal/*.dmg > artifacts/macos-universal/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -96,9 +96,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/macos-arm64
-          ./scripts/create_dmg.sh "release/선적전송.app" "artifacts/macos-arm64/선적전송-macos12-arm64.dmg" "선적전송"
-          ./scripts/create_dmg.sh "release/선적관리.app" "artifacts/macos-arm64/선적관리-macos12-arm64.dmg" "선적관리"
-          ./scripts/create_dmg.sh "release/전송로그.app" "artifacts/macos-arm64/전송로그-macos12-arm64.dmg" "전송로그"
+          ./scripts/create_dmg.sh "release/선적전송.app" "artifacts/macos-arm64/ship-sender-macos12-arm64.dmg" "선적전송"
+          ./scripts/create_dmg.sh "release/선적관리.app" "artifacts/macos-arm64/ship-manager-macos12-arm64.dmg" "선적관리"
+          ./scripts/create_dmg.sh "release/전송로그.app" "artifacts/macos-arm64/ship-log-viewer-macos12-arm64.dmg" "전송로그"
           shasum -a 256 artifacts/macos-arm64/*.dmg > artifacts/macos-arm64/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -161,12 +161,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp "artifacts/macos-universal/선적전송-macos12-universal.dmg" release-assets/ship-sender-macos12-universal.dmg
-          cp "artifacts/macos-universal/선적관리-macos12-universal.dmg" release-assets/ship-manager-macos12-universal.dmg
-          cp "artifacts/macos-universal/전송로그-macos12-universal.dmg" release-assets/ship-log-viewer-macos12-universal.dmg
-          cp "artifacts/macos-arm64/선적전송-macos12-arm64.dmg" release-assets/ship-sender-macos12-arm64.dmg
-          cp "artifacts/macos-arm64/선적관리-macos12-arm64.dmg" release-assets/ship-manager-macos12-arm64.dmg
-          cp "artifacts/macos-arm64/전송로그-macos12-arm64.dmg" release-assets/ship-log-viewer-macos12-arm64.dmg
+          cp "artifacts/macos-universal/ship-sender-macos12-universal.dmg" release-assets/ship-sender-macos12-universal.dmg
+          cp "artifacts/macos-universal/ship-manager-macos12-universal.dmg" release-assets/ship-manager-macos12-universal.dmg
+          cp "artifacts/macos-universal/ship-log-viewer-macos12-universal.dmg" release-assets/ship-log-viewer-macos12-universal.dmg
+          cp "artifacts/macos-arm64/ship-sender-macos12-arm64.dmg" release-assets/ship-sender-macos12-arm64.dmg
+          cp "artifacts/macos-arm64/ship-manager-macos12-arm64.dmg" release-assets/ship-manager-macos12-arm64.dmg
+          cp "artifacts/macos-arm64/ship-log-viewer-macos12-arm64.dmg" release-assets/ship-log-viewer-macos12-arm64.dmg
           cp "artifacts/windows/선적전송_0.1.0_x64-setup.exe" release-assets/ship-sender-windows-x64-setup.exe
           cp "artifacts/windows/선적관리_0.1.0_x64-setup.exe" release-assets/ship-manager-windows-x64-setup.exe
           cp "artifacts/windows/전송로그_0.1.0_x64-setup.exe" release-assets/ship-log-viewer-windows-x64-setup.exe

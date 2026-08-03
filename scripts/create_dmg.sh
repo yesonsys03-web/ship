@@ -22,6 +22,7 @@ OUTPUT_NAME="$(basename "$OUTPUT_DMG")"
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DMG="$(cd "$OUTPUT_DIR" && pwd)/$OUTPUT_NAME"
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ship-dmg.XXXXXX")"
+TMP_DIR="$(cd "$TMP_DIR" && pwd -P)"
 STAGE_DIR="$TMP_DIR/stage"
 MOUNT_DIR="$TMP_DIR/mount"
 RW_DMG="$TMP_DIR/rw.dmg"
@@ -29,13 +30,22 @@ BACKGROUND_DIR="$STAGE_DIR/.background"
 BACKGROUND_PNG="$BACKGROUND_DIR/background.png"
 LAYOUT_SCRIPT="$TMP_DIR/layout.applescript"
 DETACHED=1
+DETACH_TARGET="$MOUNT_DIR"
+
+is_mounted() {
+  /sbin/mount | /usr/bin/grep -F " on $1 " >/dev/null 2>&1
+}
 
 detach_mount() {
   local mount_path="$1"
+  local detach_target="$2"
   local attempt
 
   for attempt in 1 2 3 4 5; do
-    if hdiutil detach "$mount_path" -quiet; then
+    if ! is_mounted "$mount_path"; then
+      return 0
+    fi
+    if hdiutil detach "$detach_target" -quiet; then
       return 0
     fi
     sync
@@ -43,12 +53,26 @@ detach_mount() {
   done
 
   printf 'Mount still busy after retries, forcing detach: %s\n' "$mount_path" >&2
-  hdiutil detach "$mount_path" -quiet -force
+  if hdiutil detach "$detach_target" -quiet -force; then
+    return 0
+  fi
+  if ! is_mounted "$mount_path"; then
+    return 0
+  fi
+
+  /usr/sbin/diskutil unmount force "$mount_path" >/dev/null 2>&1 || true
+  hdiutil detach "$detach_target" -quiet -force || true
+  if ! is_mounted "$mount_path"; then
+    return 0
+  fi
+
+  printf 'Failed to detach mounted DMG target %s at %s\n' "$detach_target" "$mount_path" >&2
+  return 1
 }
 
 cleanup() {
   if [ "$DETACHED" -eq 0 ]; then
-    detach_mount "$MOUNT_DIR" || true
+    detach_mount "$MOUNT_DIR" "$DETACH_TARGET" || true
   fi
   rm -rf "$TMP_DIR"
 }
@@ -151,7 +175,17 @@ hdiutil create \
   "$RW_DMG" \
   >/dev/null
 
-hdiutil attach "$RW_DMG" -readwrite -noverify -noautoopen -mountpoint "$MOUNT_DIR" >/dev/null
+ATTACH_OUTPUT="$(hdiutil attach "$RW_DMG" -readwrite -noverify -noautoopen -mountpoint "$MOUNT_DIR")"
+while IFS= read -r line; do
+  case "$line" in
+    /dev/*)
+      DETACH_TARGET="${line%%[[:space:]]*}"
+      break
+      ;;
+  esac
+done <<EOF
+$ATTACH_OUTPUT
+EOF
 DETACHED=0
 
 cat > "$LAYOUT_SCRIPT" <<'APPLESCRIPT'
@@ -184,7 +218,7 @@ APPLESCRIPT
 osascript "$LAYOUT_SCRIPT" "$MOUNT_DIR" "$APP_NAME" >/dev/null
 sync
 sleep 2
-detach_mount "$MOUNT_DIR"
+detach_mount "$MOUNT_DIR" "$DETACH_TARGET"
 DETACHED=1
 
 rm -f "$OUTPUT_DMG"

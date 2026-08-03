@@ -100,10 +100,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp artifacts/macos/*.zip release-assets/
-          cp artifacts/windows/*.exe release-assets/
-          cp artifacts/macos/SHA256SUMS.txt release-assets/SHA256SUMS-macos.txt
-          cp artifacts/windows/SHA256SUMS.txt release-assets/SHA256SUMS-windows.txt
+          cp "artifacts/macos/선적전송-macos12-universal.zip" release-assets/ship-sender-macos12-universal.zip
+          cp "artifacts/macos/선적관리-macos12-universal.zip" release-assets/ship-manager-macos12-universal.zip
+          cp "artifacts/macos/전송로그-macos12-universal.zip" release-assets/ship-log-viewer-macos12-universal.zip
+          cp "artifacts/windows/선적전송_0.1.0_x64-setup.exe" release-assets/ship-sender-windows-x64-setup.exe
+          cp "artifacts/windows/선적관리_0.1.0_x64-setup.exe" release-assets/ship-manager-windows-x64-setup.exe
+          cp "artifacts/windows/전송로그_0.1.0_x64-setup.exe" release-assets/ship-log-viewer-windows-x64-setup.exe
+          (cd release-assets && sha256sum * > SHA256SUMS.txt)
       - name: Select release tag
         shell: bash
         run: |
@@ -134,7 +137,8 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md
           else
-            gh release create "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$RELEASE_TITLE" --notes-file release-notes.md
           fi
+          gh release upload "$RELEASE_TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber

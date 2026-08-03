@@ -1,15 +1,23 @@
+import os
 from pathlib import Path
 
-from ship_common.db_path import SHIP_DB_DIR_CANDIDATES, resolve_ship_db_file
+from ship_common.db_path import SHIP_DB_DIR_CANDIDATES, WINDOWS_SHIP_DB_DIR_CANDIDATES, resolve_ship_db_file
 
 
 def test_default_ship_db_candidates_match_approved_mount_paths() -> None:
-    assert SHIP_DB_DIR_CANDIDATES == (
+    posix_candidates = (
         Path("/System/Volumes/Data/USA_DB/test_jn/ship_db"),
         Path("/USA_DB/test_jn/ship_db"),
         Path("//Mserver/USA_DB/test_jn/ship_db"),
         Path("/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db"),
     )
+    expected = WINDOWS_SHIP_DB_DIR_CANDIDATES + posix_candidates if os.name == "nt" else posix_candidates + WINDOWS_SHIP_DB_DIR_CANDIDATES
+
+    assert SHIP_DB_DIR_CANDIDATES == expected
+
+
+def test_windows_ship_db_candidate_uses_unc_path() -> None:
+    assert WINDOWS_SHIP_DB_DIR_CANDIDATES == (Path(r"\\Mserver\USA_DB\test_jn\ship_db"),)
 
 
 def test_resolve_ship_db_file_uses_env_directory(monkeypatch, tmp_path: Path) -> None:

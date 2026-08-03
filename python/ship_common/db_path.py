@@ -6,11 +6,19 @@ from typing import Iterable
 
 
 SHIP_DB_FILENAME = "shipments.sqlite3"
-SHIP_DB_DIR_CANDIDATES = (
+WINDOWS_SHIP_DB_DIR_CANDIDATES = (
+    Path(r"\\Mserver\USA_DB\test_jn\ship_db"),
+)
+POSIX_SHIP_DB_DIR_CANDIDATES = (
     Path("/System/Volumes/Data/USA_DB/test_jn/ship_db"),
     Path("/USA_DB/test_jn/ship_db"),
     Path("//Mserver/USA_DB/test_jn/ship_db"),
     Path("/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db"),
+)
+SHIP_DB_DIR_CANDIDATES = (
+    WINDOWS_SHIP_DB_DIR_CANDIDATES + POSIX_SHIP_DB_DIR_CANDIDATES
+    if os.name == "nt"
+    else POSIX_SHIP_DB_DIR_CANDIDATES + WINDOWS_SHIP_DB_DIR_CANDIDATES
 )
 
 

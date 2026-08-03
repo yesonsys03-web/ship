@@ -11,6 +11,7 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 const BACKEND_HOST: &str = "127.0.0.1";
+const BACKEND_READY_PATH: &str = "/ready";
 const LEGACY_DEV_BACKEND_PORT: u16 = 8765;
 const LOG_TAIL_LIMIT: usize = 12;
 const HEALTH_POLL_ATTEMPTS: usize = 100;
@@ -169,7 +170,7 @@ fn wait_for_backend_port_to_close(port: u16) {
 }
 
 fn backend_is_healthy(port: u16) -> bool {
-    match proxy_json(port, "GET", "/health", None, HEALTH_HTTP_TIMEOUT) {
+    match proxy_json(port, "GET", BACKEND_READY_PATH, None, HEALTH_HTTP_TIMEOUT) {
         Ok(value) => value.get("ok").and_then(Value::as_bool).unwrap_or(false),
         Err(_) => false,
     }
@@ -576,6 +577,11 @@ mod tests {
     fn uses_longer_timeouts_for_slow_backend_work() {
         assert!(HISTORY_HTTP_TIMEOUT > HEALTH_HTTP_TIMEOUT);
         assert!(MUTATION_HTTP_TIMEOUT > HISTORY_HTTP_TIMEOUT);
+    }
+
+    #[test]
+    fn backend_readiness_probe_does_not_use_db_health() {
+        assert_eq!(BACKEND_READY_PATH, "/ready");
     }
 
     #[test]

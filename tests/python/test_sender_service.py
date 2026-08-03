@@ -8,6 +8,7 @@ from ship_common import audit_log
 from ship_common.db_path import SHIP_DB_FILENAME, resolve_ship_db_file
 from ship_common.models import FileEntry, ShipmentManifest
 from ship_sender import service
+from ship_sender import server as sender_server
 from ship_sender.thumbnails import resolve_thumbnail_target
 
 
@@ -190,6 +191,22 @@ def test_sent_history_returns_empty_when_shared_db_is_missing(monkeypatch, tmp_p
 
     assert history == []
     assert not (tmp_path / "shipments.sqlite3").exists()
+
+
+def test_ready_endpoint_does_not_touch_shared_db(monkeypatch) -> None:
+    payloads = []
+    handler = object.__new__(sender_server.SenderHandler)
+    handler.path = "/ready"
+    handler._send_json = lambda payload, status=200: payloads.append((status, payload))
+    monkeypatch.setattr(
+        sender_server,
+        "db_status",
+        lambda: (_ for _ in ()).throw(AssertionError("ready touched db")),
+    )
+
+    sender_server.SenderHandler.do_GET(handler)
+
+    assert payloads == [(200, {"ok": True, "role": "sender"})]
 
 
 def test_sent_history_reads_saved_manifests_newest_first(monkeypatch, tmp_path: Path) -> None:

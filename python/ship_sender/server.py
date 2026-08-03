@@ -27,6 +27,9 @@ class SenderHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed_path = urlparse(self.path)
+        if parsed_path.path == "/ready":
+            self._send_json({"ok": True, "role": "sender"})
+            return
         if parsed_path.path == "/health":
             self._send_json({"ok": True, "role": "sender", "db": db_status()})
             return

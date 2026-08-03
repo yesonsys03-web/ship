@@ -429,21 +429,47 @@ install_sidecar_bundle() {
   chmod +x "$target_dir/$executable_name"
 }
 
+sign_macho_file() {
+  local file_path="$1"
+
+  case "$(run_without_python_dyld file -b "$file_path")" in
+    *Mach-O*) run_without_python_dyld codesign --force --sign - --timestamp=none "$file_path" ;;
+  esac
+}
+
 sign_macho_files() {
   local root_dir="$1"
 
+  [ -d "$root_dir" ] || return 0
   while IFS= read -r -d '' file_path; do
-    case "$(run_without_python_dyld file -b "$file_path")" in
-      *Mach-O*) run_without_python_dyld codesign --force --sign - "$file_path" ;;
-    esac
+    sign_macho_file "$file_path"
   done < <(find "$root_dir" -type f -print0)
+}
+
+sign_macos_executables() {
+  local app_path="$1"
+  local main_executable="$2"
+  local macos_dir="$app_path/Contents/MacOS"
+  local main_executable_path="$macos_dir/$main_executable"
+
+  [ -d "$macos_dir" ] || return 0
+  while IFS= read -r -d '' file_path; do
+    [ "$file_path" = "$main_executable_path" ] && continue
+    sign_macho_file "$file_path"
+  done < <(find "$macos_dir" -type f -print0)
+
+  [ -f "$main_executable_path" ] && sign_macho_file "$main_executable_path"
 }
 
 sign_release_app() {
   local app_path="$1"
+  local main_executable="$2"
 
-  sign_macho_files "$app_path/Contents"
-  run_without_python_dyld codesign --force --sign - "$app_path"
+  sign_macho_files "$app_path/Contents/Resources"
+  sign_macho_files "$app_path/Contents/Frameworks"
+  sign_macho_files "$app_path/Contents/PlugIns"
+  sign_macos_executables "$app_path" "$main_executable"
+  run_without_python_dyld codesign --force --deep --sign - --timestamp=none "$app_path"
 }
 
 bundle_architectures() {
@@ -690,9 +716,9 @@ cp -R "$MANAGER_APP_BUILD_PATH" "$RELEASE_DIR/"
 cp -R "$LOG_VIEWER_APP_BUILD_PATH" "$RELEASE_DIR/"
 
 if command -v codesign >/dev/null 2>&1; then
-  sign_release_app "$RELEASE_DIR/선적전송.app"
-  sign_release_app "$RELEASE_DIR/선적관리.app"
-  sign_release_app "$RELEASE_DIR/전송로그.app"
+  sign_release_app "$RELEASE_DIR/선적전송.app" "ship_sender"
+  sign_release_app "$RELEASE_DIR/선적관리.app" "ship_manager"
+  sign_release_app "$RELEASE_DIR/전송로그.app" "ship_log_viewer"
 else
   printf 'codesign not found; copied .app bundles are left unsigned.\n' >&2
 fi

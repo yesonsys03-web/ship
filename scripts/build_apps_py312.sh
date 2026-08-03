@@ -332,7 +332,11 @@ else
     esac
   fi
   TAURI_BUILD_ARGS=(build)
-  PYINSTALLER_ARCH_ARGS=()
+  case "$(uname -m)" in
+    arm64) PYINSTALLER_ARCH_ARGS=(--target-arch arm64) ;;
+    x86_64) PYINSTALLER_ARCH_ARGS=(--target-arch x86_64) ;;
+    *) printf 'Unsupported macOS architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
+  esac
   WRAPPER_TARGET_TRIPLES=("$TARGET_TRIPLE")
   WRAPPER_CC_ARCH_ARGS=()
 fi

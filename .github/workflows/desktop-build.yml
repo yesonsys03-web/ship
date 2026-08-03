@@ -37,17 +37,73 @@ jobs:
           codesign --verify --deep --strict "release/선적전송.app"
           codesign --verify --deep --strict "release/선적관리.app"
           codesign --verify --deep --strict "release/전송로그.app"
-      - name: Package macOS apps
+      - name: Package macOS DMGs
         run: |
-          mkdir -p artifacts/macos
-          ditto -c -k --sequesterRsrc --keepParent "release/선적전송.app" "artifacts/macos/선적전송-macos12-universal.zip"
-          ditto -c -k --sequesterRsrc --keepParent "release/선적관리.app" "artifacts/macos/선적관리-macos12-universal.zip"
-          ditto -c -k --sequesterRsrc --keepParent "release/전송로그.app" "artifacts/macos/전송로그-macos12-universal.zip"
-          shasum -a 256 artifacts/macos/*.zip > artifacts/macos/SHA256SUMS.txt
+          set -euo pipefail
+          mkdir -p artifacts/macos-universal
+          hdiutil create -volname "선적전송" -srcfolder "release/선적전송.app" -ov -format UDZO "artifacts/macos-universal/선적전송-macos12-universal.dmg"
+          hdiutil create -volname "선적관리" -srcfolder "release/선적관리.app" -ov -format UDZO "artifacts/macos-universal/선적관리-macos12-universal.dmg"
+          hdiutil create -volname "전송로그" -srcfolder "release/전송로그.app" -ov -format UDZO "artifacts/macos-universal/전송로그-macos12-universal.dmg"
+          shasum -a 256 artifacts/macos-universal/*.dmg > artifacts/macos-universal/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: macos-universal-apps
-          path: artifacts/macos/*
+          path: artifacts/macos-universal/*
+
+  macos-arm64:
+    name: macOS Apple Silicon apps
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+      - name: Verify Apple Silicon runner
+        run: |
+          test "$(uname -m)" = "arm64"
+      - name: Build Apple Silicon macOS apps
+        run: SHIP_MACOS_BUILD_MODE=native PYTHON_RUNTIME_VERSION=3.11 MACOSX_DEPLOYMENT_TARGET=12.0 ./scripts/build_apps_py312.sh
+      - name: Verify code signatures
+        run: |
+          codesign --verify --deep --strict "release/선적전송.app"
+          codesign --verify --deep --strict "release/선적관리.app"
+          codesign --verify --deep --strict "release/전송로그.app"
+      - name: Verify Apple Silicon binaries
+        run: |
+          set -euo pipefail
+          require_arm64_only() {
+            local label="$1"
+            local binary_path="$2"
+            local archs
+            archs="$(lipo -archs "$binary_path")"
+            printf '%s: %s\n' "$label" "$archs"
+            test "$archs" = "arm64"
+          }
+          require_arm64_only "sender main" "release/선적전송.app/Contents/MacOS/ship_sender"
+          require_arm64_only "sender sidecar wrapper" "release/선적전송.app/Contents/MacOS/ship-sender-backend"
+          require_arm64_only "sender bundled sidecar" "release/선적전송.app/Contents/Resources/ship-sender-backend-bundle/ship-sender-backend"
+          require_arm64_only "manager main" "release/선적관리.app/Contents/MacOS/ship_manager"
+          require_arm64_only "manager sidecar wrapper" "release/선적관리.app/Contents/MacOS/ship-manager-backend"
+          require_arm64_only "manager bundled sidecar" "release/선적관리.app/Contents/Resources/ship-manager-backend-bundle/ship-manager-backend"
+          require_arm64_only "log viewer main" "release/전송로그.app/Contents/MacOS/ship_log_viewer"
+      - name: Package Apple Silicon macOS DMGs
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/macos-arm64
+          hdiutil create -volname "선적전송" -srcfolder "release/선적전송.app" -ov -format UDZO "artifacts/macos-arm64/선적전송-macos12-arm64.dmg"
+          hdiutil create -volname "선적관리" -srcfolder "release/선적관리.app" -ov -format UDZO "artifacts/macos-arm64/선적관리-macos12-arm64.dmg"
+          hdiutil create -volname "전송로그" -srcfolder "release/전송로그.app" -ov -format UDZO "artifacts/macos-arm64/전송로그-macos12-arm64.dmg"
+          shasum -a 256 artifacts/macos-arm64/*.dmg > artifacts/macos-arm64/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-apps
+          path: artifacts/macos-arm64/*
 
   windows-x64:
     name: Windows x64 installers
@@ -85,12 +141,17 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - macos-universal
+      - macos-arm64
       - windows-x64
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: macos-universal-apps
-          path: artifacts/macos
+          path: artifacts/macos-universal
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-arm64-apps
+          path: artifacts/macos-arm64
       - uses: actions/download-artifact@v4
         with:
           name: windows-x64-installers
@@ -100,9 +161,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          cp "artifacts/macos/선적전송-macos12-universal.zip" release-assets/ship-sender-macos12-universal.zip
-          cp "artifacts/macos/선적관리-macos12-universal.zip" release-assets/ship-manager-macos12-universal.zip
-          cp "artifacts/macos/전송로그-macos12-universal.zip" release-assets/ship-log-viewer-macos12-universal.zip
+          cp "artifacts/macos-universal/선적전송-macos12-universal.dmg" release-assets/ship-sender-macos12-universal.dmg
+          cp "artifacts/macos-universal/선적관리-macos12-universal.dmg" release-assets/ship-manager-macos12-universal.dmg
+          cp "artifacts/macos-universal/전송로그-macos12-universal.dmg" release-assets/ship-log-viewer-macos12-universal.dmg
+          cp "artifacts/macos-arm64/선적전송-macos12-arm64.dmg" release-assets/ship-sender-macos12-arm64.dmg
+          cp "artifacts/macos-arm64/선적관리-macos12-arm64.dmg" release-assets/ship-manager-macos12-arm64.dmg
+          cp "artifacts/macos-arm64/전송로그-macos12-arm64.dmg" release-assets/ship-log-viewer-macos12-arm64.dmg
           cp "artifacts/windows/선적전송_0.1.0_x64-setup.exe" release-assets/ship-sender-windows-x64-setup.exe
           cp "artifacts/windows/선적관리_0.1.0_x64-setup.exe" release-assets/ship-manager-windows-x64-setup.exe
           cp "artifacts/windows/전송로그_0.1.0_x64-setup.exe" release-assets/ship-log-viewer-windows-x64-setup.exe

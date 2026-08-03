@@ -34,16 +34,20 @@ function New-SidecarBinary {
     $workPath = Join-Path $BuildDir "work-$AppName"
     $specPath = Join-Path $BuildDir "spec"
     $binaryDir = Join-Path $RootDir "apps\$TauriApp\src-tauri\binaries"
-    $pyInstallerOutput = Join-Path $distPath "$AppName\$AppName.exe"
+    $pyInstallerOutput = Join-Path $distPath "$AppName.exe"
     $tauriBinary = Join-Path $binaryDir "$AppName-$Target.exe"
 
     if (Test-Path (Join-Path $distPath $AppName)) {
         Remove-Item -Recurse -Force (Join-Path $distPath $AppName)
     }
+    if (Test-Path (Join-Path $distPath "$AppName.exe")) {
+        Remove-Item -Force (Join-Path $distPath "$AppName.exe")
+    }
     New-Item -ItemType Directory -Force $binaryDir | Out-Null
 
     & $VenvDir\Scripts\python.exe -m PyInstaller `
         --clean `
+        --onefile `
         --name $AppName `
         --paths (Join-Path $RootDir "python") `
         --distpath $distPath `

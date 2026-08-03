@@ -18,10 +18,9 @@ const HEALTH_POLL_ATTEMPTS: usize = 100;
 const HEALTH_POLL_DELAY: Duration = Duration::from_millis(120);
 const CONNECT_TIMEOUT: Duration = Duration::from_millis(900);
 const HEALTH_HTTP_TIMEOUT: Duration = Duration::from_millis(900);
-const HISTORY_HTTP_TIMEOUT: Duration = Duration::from_secs(10);
+const HISTORY_HTTP_TIMEOUT: Duration = Duration::from_secs(2);
 const MUTATION_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
-#[cfg(windows)]
-const WINDOWS_SHIP_DB_DIR: &str = "\\\\Mserver\\USA_DB\\test_jn\\ship_db";
+const WINDOWS_SHIP_DB_DIR: &str = "//Mserver/USA_DB/test_jn/ship_db";
 
 static BACKEND_STARTUP_LOCK: Mutex<()> = Mutex::new(());
 
@@ -38,19 +37,19 @@ struct BackendProcess {
     spawn_error: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sender_health(app: tauri::AppHandle) -> Result<Value, String> {
     let port = ensure_backend(&app)?;
     proxy_json(port, "GET", "/health", None, HEALTH_HTTP_TIMEOUT)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sender_history(app: tauri::AppHandle) -> Result<Value, String> {
     let port = ensure_backend(&app)?;
     proxy_json(port, "GET", "/history", None, HISTORY_HTTP_TIMEOUT)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sender_scan(app: tauri::AppHandle, path: String) -> Result<Value, String> {
     let port = ensure_backend(&app)?;
     proxy_json(
@@ -62,13 +61,13 @@ fn sender_scan(app: tauri::AppHandle, path: String) -> Result<Value, String> {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sender_send(app: tauri::AppHandle, manifest: Value) -> Result<Value, String> {
     let port = ensure_backend(&app)?;
     proxy_json(port, "POST", "/send", Some(manifest), MUTATION_HTTP_TIMEOUT)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sender_log_generate(
     app: tauri::AppHandle,
     manifest: Value,
@@ -84,7 +83,7 @@ fn sender_log_generate(
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn sender_backend_url(app: tauri::AppHandle) -> Result<String, String> {
     let port = ensure_backend(&app)?;
     Ok(backend_url(port))
@@ -580,8 +579,18 @@ mod tests {
     }
 
     #[test]
+    fn bounds_history_timeout_for_unresponsive_shared_db() {
+        assert!(HISTORY_HTTP_TIMEOUT <= Duration::from_secs(2));
+    }
+
+    #[test]
     fn backend_readiness_probe_does_not_use_db_health() {
         assert_eq!(BACKEND_READY_PATH, "/ready");
+    }
+
+    #[test]
+    fn windows_sidecar_db_dir_uses_forward_slash_unc_path() {
+        assert_eq!(WINDOWS_SHIP_DB_DIR, "//Mserver/USA_DB/test_jn/ship_db");
     }
 
     #[test]

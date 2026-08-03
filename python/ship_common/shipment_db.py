@@ -293,7 +293,6 @@ class ShipmentDatabase:
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_file, timeout=10)
         connection.row_factory = sqlite3.Row
-        connection.execute("pragma journal_mode = wal")
         connection.execute("pragma busy_timeout = 5000")
         return connection
 

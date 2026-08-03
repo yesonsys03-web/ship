@@ -93,3 +93,12 @@ def test_existing_database_migrates_thumbnail_table(tmp_path: Path) -> None:
         ).fetchone()
 
     assert table is not None
+
+
+def test_database_does_not_force_wal_journal_mode(tmp_path: Path) -> None:
+    database = ShipmentDatabase(tmp_path / "shipments.sqlite3")
+
+    with database._connect() as connection:
+        journal_mode = connection.execute("pragma journal_mode").fetchone()[0]
+
+    assert journal_mode != "wal"

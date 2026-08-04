@@ -17,11 +17,17 @@ APP_DATA_DIR_NAME = "Ship"
 AUDIT_LOG_DIR_NAME = "audit_logs"
 
 
-def write_manifest_audit_event(action: str, manifest_payload: Dict[str, Any], **metadata: Any) -> None:
+def write_manifest_audit_event(
+    action: str,
+    manifest_payload: Dict[str, Any],
+    *,
+    db_file: Path | None = None,
+    **metadata: Any,
+) -> None:
     try:
         manifest = ShipmentManifest.from_dict(manifest_payload)
         entry = build_manifest_audit_entry(action, manifest, metadata)
-        log_dir = audit_log_dir()
+        log_dir = audit_log_dir(db_file)
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"{entry['date']}.jsonl"
         with log_file.open("a", encoding="utf-8") as handle:
@@ -59,11 +65,23 @@ def build_manifest_audit_entry(action: str, manifest: ShipmentManifest, metadata
     }
 
 
-def audit_log_dir() -> Path:
+def audit_log_dir(db_file: Path | None = None) -> Path:
     configured = os.environ.get("SHIP_AUDIT_LOG_DIR", "").strip()
     if configured:
         return Path(configured)
+    shared_dir = shared_audit_log_dir(db_file)
+    if shared_dir is not None:
+        return shared_dir
     return local_audit_log_dir()
+
+
+def shared_audit_log_dir(db_file: Path | None = None) -> Path | None:
+    if db_file is not None:
+        return db_file.parent
+    configured_db_dir = os.environ.get("SHIP_DB_DIR", "").strip()
+    if configured_db_dir:
+        return Path(configured_db_dir).expanduser()
+    return None
 
 
 def local_audit_log_dir() -> Path:

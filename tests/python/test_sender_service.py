@@ -73,7 +73,7 @@ def test_send_writes_host_ip_audit_log(monkeypatch, tmp_path: Path) -> None:
     assert entries[0]["hostname_source"] == "hosts"
 
 
-def test_default_audit_log_dir_uses_local_app_data_not_shared_db_dir(monkeypatch, tmp_path: Path) -> None:
+def test_default_audit_log_dir_uses_shared_db_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("SHIP_AUDIT_LOG_DIR", raising=False)
     shared_db_dir = tmp_path / "USA_DB" / "test_jn" / "ship_db"
     local_data_dir = tmp_path / "local-data"
@@ -83,8 +83,42 @@ def test_default_audit_log_dir_uses_local_app_data_not_shared_db_dir(monkeypatch
     monkeypatch.setattr(audit_log.os, "name", "posix")
     monkeypatch.setattr(audit_log.sys, "platform", "linux")
 
-    assert audit_log.audit_log_dir() == local_data_dir / "Ship" / "audit_logs"
-    assert audit_log.audit_log_dir() != shared_db_dir
+    assert audit_log.audit_log_dir() == shared_db_dir
+    assert audit_log.audit_log_dir() != local_data_dir / "Ship" / "audit_logs"
+
+
+def test_explicit_audit_log_dir_overrides_shared_db_dir(monkeypatch, tmp_path: Path) -> None:
+    shared_db_dir = tmp_path / "USA_DB" / "test_jn" / "ship_db"
+    configured_log_dir = tmp_path / "audit-override"
+
+    monkeypatch.setenv("SHIP_DB_DIR", str(shared_db_dir))
+    monkeypatch.setenv("SHIP_AUDIT_LOG_DIR", str(configured_log_dir))
+
+    assert audit_log.audit_log_dir() == configured_log_dir
+
+
+def test_send_writes_audit_log_to_shared_db_dir_by_default(monkeypatch, tmp_path: Path) -> None:
+    manifest = ShipmentManifest(
+        id="ship-shared-audit",
+        source_path="/tmp/Bobs_Burgers/FASA03",
+        folder_name="밥스버거 FASA03 1개 씬",
+        created_at=datetime(2026, 8, 4, tzinfo=timezone.utc).isoformat(),
+        files=[FileEntry(path="03A_S01.bobs-scene", size=0, is_dir=False)],
+    )
+    shared_db_dir = tmp_path / "USA_DB" / "test_jn" / "ship_db"
+    shared_db_dir.mkdir(parents=True)
+    sqlite3.connect(shared_db_dir / "shipments.sqlite3").close()
+
+    monkeypatch.delenv("SHIP_AUDIT_LOG_DIR", raising=False)
+    monkeypatch.setenv("SHIP_DB_DIR", str(shared_db_dir))
+    monkeypatch.setattr(audit_log, "detect_local_ip", lambda: "10.20.30.40")
+
+    service.send(manifest.to_dict())
+
+    assert (shared_db_dir / "shipments.sqlite3").exists()
+    entries = read_audit_entries(shared_db_dir)
+    assert entries[0]["action"] == "send"
+    assert entries[0]["manifest_id"] == "ship-shared-audit"
 
 
 def test_windows_default_audit_log_dir_uses_local_app_data(monkeypatch, tmp_path: Path) -> None:

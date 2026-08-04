@@ -36,7 +36,7 @@ def send(manifest_payload: Dict[str, Any]) -> Dict[str, Any]:
         message = format_send_db_error(db_file, exc)
         print(f"[SEND-DEBUG] /send save error {message}", flush=True)
         raise RuntimeError(message) from exc
-    write_manifest_audit_event("send", manifest.to_dict())
+    write_manifest_audit_event("send", manifest.to_dict(), db_file=db_file)
     return result
 
 

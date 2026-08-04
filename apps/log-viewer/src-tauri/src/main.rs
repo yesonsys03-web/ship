@@ -2,12 +2,30 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 const APP_DATA_DIR_NAME: &str = "Ship";
 const AUDIT_LOG_DIR_NAME: &str = "audit_logs";
+#[cfg(windows)]
+const WINDOWS_SHARED_AUDIT_LOG_DIR_CANDIDATES: [&str; 5] = [
+    "//Mserver/USA_DB/test_jn/ship_db",
+    "\\\\Mserver\\USA_DB\\test_jn\\ship_db",
+    "/System/Volumes/Data/USA_DB/test_jn/ship_db",
+    "/USA_DB/test_jn/ship_db",
+    "/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db",
+];
+#[cfg(windows)]
+const SHARED_AUDIT_LOG_DIR_CANDIDATES: [&str; 5] = WINDOWS_SHARED_AUDIT_LOG_DIR_CANDIDATES;
+#[cfg(not(windows))]
+const SHARED_AUDIT_LOG_DIR_CANDIDATES: [&str; 4] = [
+    "/System/Volumes/Data/USA_DB/test_jn/ship_db",
+    "/USA_DB/test_jn/ship_db",
+    "//Mserver/USA_DB/test_jn/ship_db",
+    "/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db",
+];
 const MAX_MALFORMED_SAMPLES: usize = 20;
 const MAX_ENRICHED_FILES: usize = 80;
 const MAX_RECURSIVE_DIRS: usize = 96;
@@ -56,39 +74,83 @@ struct AuditLogReadResult {
 
 #[tauri::command]
 fn list_audit_log_dates() -> Result<Vec<AuditLogDate>, String> {
-    list_audit_log_dates_in(&default_audit_log_dir())
+    list_audit_log_dates_from_dirs(&default_audit_log_dirs())
         .map_err(|error| format!("감사 로그 날짜를 불러오지 못했습니다: {error}"))
 }
 
 #[tauri::command]
 fn read_audit_log_entries(date: String) -> Result<AuditLogReadResult, String> {
-    read_audit_log_entries_in(&default_audit_log_dir(), &date)
+    read_audit_log_entries_from_dirs(&default_audit_log_dirs(), &date)
         .map_err(|error| format!("{date} 감사 로그를 읽지 못했습니다: {error}"))
 }
 
-fn default_audit_log_dir() -> PathBuf {
-    audit_log_dir_from_configured_env(
+fn default_audit_log_dirs() -> Vec<PathBuf> {
+    audit_log_dirs_from_configured_env(
         std::env::var("SHIP_AUDIT_LOG_DIR").ok(),
+        std::env::var("SHIP_DB_DIR").ok(),
         local_audit_log_dir(),
+        shared_audit_log_dirs(),
     )
+}
+
+fn audit_log_dirs_from_configured_env(
+    configured_audit_dir: Option<String>,
+    configured_db_dir: Option<String>,
+    local_dir: Option<PathBuf>,
+    shared_dirs: Vec<PathBuf>,
+) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    push_configured_dir(&mut dirs, configured_audit_dir);
+    if let Some(local_dir) = local_dir {
+        push_unique_dir(&mut dirs, local_dir);
+    }
+    push_configured_dir(&mut dirs, configured_db_dir);
+    for shared_dir in shared_dirs {
+        push_unique_dir(&mut dirs, shared_dir);
+    }
+    if dirs.is_empty() {
+        dirs.push(fallback_audit_log_dir());
+    }
+    dirs
 }
 
 fn audit_log_dir_from_configured_env(
     configured_dir: Option<String>,
     local_dir: Option<PathBuf>,
 ) -> PathBuf {
-    if let Some(configured_dir) = configured_dir {
-        let trimmed = configured_dir.trim();
-        if !trimmed.is_empty() {
-            return PathBuf::from(trimmed);
-        }
-    }
+    audit_log_dirs_from_configured_env(configured_dir, None, local_dir, Vec::new())
+        .into_iter()
+        .next()
+        .unwrap_or_else(fallback_audit_log_dir)
+}
 
-    local_dir.unwrap_or_else(|| {
-        PathBuf::from("data")
-            .join(APP_DATA_DIR_NAME)
-            .join(AUDIT_LOG_DIR_NAME)
-    })
+fn push_configured_dir(dirs: &mut Vec<PathBuf>, configured_dir: Option<String>) {
+    let Some(configured_dir) = configured_dir else {
+        return;
+    };
+    let trimmed = configured_dir.trim();
+    if !trimmed.is_empty() {
+        push_unique_dir(dirs, PathBuf::from(trimmed));
+    }
+}
+
+fn push_unique_dir(dirs: &mut Vec<PathBuf>, dir: PathBuf) {
+    if !dirs.contains(&dir) {
+        dirs.push(dir);
+    }
+}
+
+fn fallback_audit_log_dir() -> PathBuf {
+    PathBuf::from("data")
+        .join(APP_DATA_DIR_NAME)
+        .join(AUDIT_LOG_DIR_NAME)
+}
+
+fn shared_audit_log_dirs() -> Vec<PathBuf> {
+    SHARED_AUDIT_LOG_DIR_CANDIDATES
+        .iter()
+        .map(PathBuf::from)
+        .collect()
 }
 
 #[cfg(windows)]
@@ -181,6 +243,62 @@ fn list_audit_log_dates_in(log_dir: &Path) -> Result<Vec<AuditLogDate>, String> 
 
     dates.sort_by(|first, second| second.date.cmp(&first.date));
     Ok(dates)
+}
+
+fn list_audit_log_dates_from_dirs(log_dirs: &[PathBuf]) -> Result<Vec<AuditLogDate>, String> {
+    let mut dates = BTreeSet::new();
+    for log_dir in log_dirs {
+        for date in list_audit_log_dates_in(log_dir)? {
+            dates.insert(date.date);
+        }
+    }
+    Ok(dates
+        .into_iter()
+        .rev()
+        .map(|date| AuditLogDate { date })
+        .collect())
+}
+
+fn read_audit_log_entries_from_dirs(
+    log_dirs: &[PathBuf],
+    date: &str,
+) -> Result<AuditLogReadResult, String> {
+    if !is_valid_audit_date(date) {
+        return Err("날짜는 YYYY-MM-DD 형식이어야 합니다.".to_string());
+    }
+
+    let mut entries = Vec::new();
+    let mut malformed_lines = Vec::new();
+    let mut malformed_count = 0;
+    let mut found_log = false;
+    for log_dir in log_dirs {
+        let log_path = log_path_for_date(log_dir, date);
+        if !log_path.exists() {
+            continue;
+        }
+        found_log = true;
+        let result = read_audit_log_entries_in(log_dir, date)?;
+        entries.extend(result.entries);
+        malformed_count += result.malformed_count;
+        for line in result.malformed_lines {
+            if malformed_lines.len() < MAX_MALFORMED_SAMPLES {
+                malformed_lines.push(line);
+            }
+        }
+    }
+    if !found_log {
+        return Err(format!(
+            "{} 파일을 찾지 못했습니다.",
+            log_path_for_date(&log_dirs[0], date).display()
+        ));
+    }
+    entries.sort_by(|first, second| second.timestamp.cmp(&first.timestamp));
+    Ok(AuditLogReadResult {
+        date: date.to_string(),
+        entries,
+        malformed_count,
+        malformed_lines,
+    })
 }
 
 fn read_audit_log_entries_in(log_dir: &Path, date: &str) -> Result<AuditLogReadResult, String> {
@@ -712,6 +830,114 @@ mod tests {
                 .join(APP_DATA_DIR_NAME)
                 .join(AUDIT_LOG_DIR_NAME)
         );
+    }
+
+    #[test]
+    fn audit_log_dirs_include_local_and_shared_locations() {
+        let configured_audit = PathBuf::from("/tmp/configured-audit");
+        let local = PathBuf::from("/tmp/local-audit");
+        let configured_db = PathBuf::from("/tmp/shared-db");
+        let shared = PathBuf::from("/tmp/shared-candidate");
+
+        assert_eq!(
+            audit_log_dirs_from_configured_env(
+                Some(configured_audit.to_string_lossy().to_string()),
+                Some(configured_db.to_string_lossy().to_string()),
+                Some(local.clone()),
+                vec![configured_db.clone(), shared.clone()]
+            ),
+            vec![configured_audit, local, configured_db, shared]
+        );
+    }
+
+    #[test]
+    fn lists_dates_from_local_and_shared_audit_dirs() {
+        let local_dir = make_temp_log_dir("dates-local");
+        let shared_dir = make_temp_log_dir("dates-shared");
+        fs::write(local_dir.join("2026-08-04.jsonl"), "").expect("local date should write");
+        fs::write(shared_dir.join("2026-07-09.jsonl"), "").expect("shared date should write");
+        fs::write(shared_dir.join("2026-08-04.jsonl"), "").expect("duplicate date should write");
+
+        let dates = list_audit_log_dates_from_dirs(&[local_dir.clone(), shared_dir.clone()])
+            .expect("dates should list");
+
+        assert_eq!(
+            dates,
+            vec![
+                AuditLogDate {
+                    date: "2026-08-04".to_string()
+                },
+                AuditLogDate {
+                    date: "2026-07-09".to_string()
+                }
+            ]
+        );
+        fs::remove_dir_all(local_dir).expect("local temp dir should be removed");
+        fs::remove_dir_all(shared_dir).expect("shared temp dir should be removed");
+    }
+
+    #[test]
+    fn reads_entries_from_local_and_shared_audit_dirs() {
+        let local_dir = make_temp_log_dir("read-local");
+        let shared_dir = make_temp_log_dir("read-shared");
+        let shared_line = serde_json::json!({
+            "schema_version": 1,
+            "timestamp": "2026-07-09T08:00:00Z",
+            "date": "2026-08-04",
+            "action": "generate",
+            "manifest_id": "shared-log",
+            "folder_name": "old shared log",
+            "source_path": "/shared/source",
+            "file_count": 0,
+            "files": [],
+            "note": "",
+            "job": "",
+            "tk": "",
+            "batch": "",
+            "ip": "unknown",
+            "hostname": "shared-pc",
+            "hostname_source": "socket"
+        });
+        let local_line = serde_json::json!({
+            "schema_version": 1,
+            "timestamp": "2026-08-04T08:00:00Z",
+            "date": "2026-08-04",
+            "action": "send",
+            "manifest_id": "local-log",
+            "folder_name": "new local log",
+            "source_path": "/local/source",
+            "file_count": 0,
+            "files": [],
+            "note": "",
+            "job": "",
+            "tk": "",
+            "batch": "",
+            "ip": "unknown",
+            "hostname": "local-pc",
+            "hostname_source": "socket"
+        });
+        fs::write(
+            shared_dir.join("2026-08-04.jsonl"),
+            format!("{shared_line}\n"),
+        )
+        .expect("shared log should write");
+        fs::write(
+            local_dir.join("2026-08-04.jsonl"),
+            format!("{local_line}\n"),
+        )
+        .expect("local log should write");
+
+        let result = read_audit_log_entries_from_dirs(
+            &[local_dir.clone(), shared_dir.clone()],
+            "2026-08-04",
+        )
+        .expect("combined logs should read");
+
+        assert_eq!(result.entries.len(), 2);
+        assert_eq!(result.entries[0].manifest_id.as_deref(), Some("local-log"));
+        assert_eq!(result.entries[1].manifest_id.as_deref(), Some("shared-log"));
+        fs::remove_dir_all(local_dir).expect("local temp dir should be removed");
+        fs::remove_dir_all(shared_dir).expect("shared temp dir should be removed");
     }
 
     #[test]

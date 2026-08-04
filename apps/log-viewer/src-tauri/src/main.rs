@@ -101,12 +101,12 @@ fn audit_log_dirs_from_configured_env(
 ) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
     push_configured_dir(&mut dirs, configured_audit_dir);
-    if let Some(local_dir) = local_dir {
-        push_unique_dir(&mut dirs, local_dir);
-    }
     push_configured_dir(&mut dirs, configured_db_dir);
     for shared_dir in shared_dirs {
         push_unique_dir(&mut dirs, shared_dir);
+    }
+    if let Some(local_dir) = local_dir {
+        push_unique_dir(&mut dirs, local_dir);
     }
     if dirs.is_empty() {
         dirs.push(fallback_audit_log_dir());
@@ -846,7 +846,7 @@ mod tests {
                 Some(local.clone()),
                 vec![configured_db.clone(), shared.clone()]
             ),
-            vec![configured_audit, local, configured_db, shared]
+            vec![configured_audit, configured_db, shared, local]
         );
     }
 

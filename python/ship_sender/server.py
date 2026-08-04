@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import sys
@@ -177,12 +178,34 @@ def save_persisted_thumbnail_bytes(shipment_id: str, file_path: str, thumbnail: 
 
 def watch_parent_process(server: BaseServer, parent_pid: int, interval: float = 1.0) -> None:
     while True:
-        try:
-            os.kill(parent_pid, 0)
-        except OSError:
+        if not parent_process_exists(parent_pid):
             server.shutdown()
             return
         time.sleep(interval)
+
+
+def parent_process_exists(parent_pid: int) -> bool:
+    if sys.platform == "win32":
+        return windows_process_exists(parent_pid)
+    try:
+        os.kill(parent_pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def windows_process_exists(parent_pid: int) -> bool:
+    access_denied = 5
+    synchronize = 0x00100000
+    wait_object_0 = 0x00000000
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(synchronize, False, parent_pid)
+    if not handle:
+        return ctypes.get_last_error() == access_denied
+    try:
+        return kernel32.WaitForSingleObject(handle, 0) != wait_object_0
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 def start_parent_watchdog(server: BaseServer, parent_pid: int | None) -> threading.Thread | None:

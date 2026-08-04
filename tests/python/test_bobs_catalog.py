@@ -7,11 +7,45 @@ from types import SimpleNamespace
 import pytest
 
 from ship_sender import server as sender_server
-from ship_sender.bobs_catalog import BOBS_CATALOG_ROOTS, bobs_catalog_job, bobs_catalog_jobs, read_scene_names, sequences_for_scenes
+from ship_sender.bobs_catalog import (
+    BOBS_CATALOG_ROOTS,
+    bobs_catalog_job,
+    bobs_catalog_jobs,
+    bobs_catalog_root_candidates,
+    read_scene_names,
+    sequences_for_scenes,
+)
 
 
 def test_bobs_catalog_roots_include_windows_network_share() -> None:
     assert Path("//Mserver/USA_DB") in BOBS_CATALOG_ROOTS
+
+
+def test_bobs_catalog_roots_include_ship_db_parent_from_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    ship_db_dir = tmp_path / "ship_db"
+    monkeypatch.setenv("SHIP_DB_DIR", str(ship_db_dir))
+
+    assert bobs_catalog_root_candidates()[0] == tmp_path
+
+
+def test_bobs_catalog_roots_include_windows_ship_db_parent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SHIP_DB_DIR", "//Mserver/USA_DB/test_jn/ship_db")
+
+    assert bobs_catalog_root_candidates()[0] == Path("//Mserver/USA_DB/test_jn")
+
+
+def test_bobs_catalog_job_uses_ship_db_parent_for_default_scene_lookup(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("SHIP_DB_DIR", str(tmp_path / "ship_db"))
+    scene_db = tmp_path / "db_jobs" / "FASA01" / "scene.db"
+    scene_db.parent.mkdir(parents=True)
+    write_scene_db(scene_db, ["01A_S01"])
+
+    payload = bobs_catalog_job("FASA01")
+
+    assert payload["root"] == str(tmp_path)
+    assert payload["scene_db_path"] == str(scene_db)
+    assert payload["status"] == "ok"
+    assert payload["scenes"] == ["01A_S01"]
 
 
 def test_bobs_catalog_jobs_uses_first_available_root_and_filters_sorted_jobs(tmp_path: Path) -> None:

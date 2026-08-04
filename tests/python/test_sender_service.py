@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -193,6 +194,61 @@ def test_send_persists_backend_sent_at_without_changing_created_at(monkeypatch, 
     assert stored_manifest["created_at"] == selected_shipment_date
     assert stored_manifest["sent_at"] != frontend_supplied_sent_at
     assert before_send <= stored_sent_at <= after_send
+
+
+def test_send_succeeds_when_db_dir_cannot_create_journal_sidecars(monkeypatch, tmp_path: Path) -> None:
+    manifest = ShipmentManifest(
+        id="ship-memory-journal",
+        source_path="/tmp/Bobs_Burgers/FASA03",
+        folder_name="밥스버거 FASA03 1개 씬",
+        created_at=datetime(2026, 8, 4, tzinfo=timezone.utc).isoformat(),
+        files=[FileEntry(path="03A_S01.bobs-scene", size=0, is_dir=False)],
+    )
+    db_dir = tmp_path / "db"
+    db_dir.mkdir()
+    db_file = db_dir / "shipments.sqlite3"
+    sqlite3.connect(db_file).close()
+
+    monkeypatch.setenv("SHIP_DB_DIR", str(db_dir))
+    os.chmod(db_file, 0o666)
+    os.chmod(db_dir, 0o555)
+    try:
+        result = service.send(manifest.to_dict())
+    finally:
+        os.chmod(db_dir, 0o755)
+
+    assert result["ok"] is True
+    assert not (db_dir / "shipments.sqlite3-journal").exists()
+    assert service.sent_history()[0]["id"] == "ship-memory-journal"
+
+
+def test_send_db_failure_message_includes_db_path(monkeypatch, tmp_path: Path) -> None:
+    manifest = ShipmentManifest(
+        id="ship-db-error",
+        source_path="/tmp/SHIP_ERROR",
+        folder_name="SHIP_ERROR",
+        created_at=datetime(2026, 8, 4, tzinfo=timezone.utc).isoformat(),
+        files=[],
+    )
+    db_dir = tmp_path / "db"
+
+    class FailingDatabase:
+        def __init__(self, db_file: Path) -> None:
+            self.db_file = db_file
+
+        def save(self, payload: dict[str, object]) -> dict[str, object]:
+            raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setenv("SHIP_DB_DIR", str(db_dir))
+    monkeypatch.setattr(service, "ShipmentDatabase", FailingDatabase)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        service.send(manifest.to_dict())
+
+    message = str(exc_info.value)
+    assert "전송 기록을 공유 DB에 저장하지 못했습니다" in message
+    assert str(db_dir / "shipments.sqlite3") in message
+    assert "attempt to write a readonly database" in message
 
 
 def test_sent_history_returns_empty_when_shared_db_is_missing(monkeypatch, tmp_path: Path) -> None:

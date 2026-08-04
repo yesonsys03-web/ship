@@ -29,9 +29,26 @@ def parse_bobs_pdf(
 
 def send(manifest_payload: Dict[str, Any]) -> Dict[str, Any]:
     manifest = ShipmentManifest.from_dict(manifest_payload)
-    result = ShipmentDatabase(resolve_ship_db_file()).save(manifest.to_dict())
+    db_file = resolve_ship_db_file()
+    try:
+        result = ShipmentDatabase(db_file).save(manifest.to_dict())
+    except Exception as exc:
+        message = format_send_db_error(db_file, exc)
+        print(f"[SEND-DEBUG] /send save error {message}", flush=True)
+        raise RuntimeError(message) from exc
     write_manifest_audit_event("send", manifest.to_dict())
     return result
+
+
+def format_send_db_error(db_file: Path, exc: Exception) -> str:
+    winerror = getattr(exc, "winerror", None)
+    winerror_text = f" winerror={winerror}" if winerror is not None else ""
+    return (
+        "전송 기록을 공유 DB에 저장하지 못했습니다. "
+        f"DB 경로: {db_file}. "
+        f"오류: {type(exc).__name__}: {exc}{winerror_text}. "
+        "DB 파일 쓰기 권한 또는 같은 폴더의 SQLite 잠금/저널 생성 권한을 확인하세요."
+    )
 
 
 def log_generate(manifest_payload: Dict[str, Any], metadata: Dict[str, Any] | None = None) -> Dict[str, Any]:

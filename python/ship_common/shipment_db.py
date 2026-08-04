@@ -306,6 +306,9 @@ class ShipmentDatabase:
         connection.execute(f"pragma busy_timeout = {busy_timeout}")
         if read_only:
             connection.execute("pragma query_only = on")
+        else:
+            # Some network shares allow DB writes but reject sidecar journal files.
+            connection.execute("pragma journal_mode = memory")
         return connection
 
 

@@ -27,8 +27,7 @@ function New-SidecarBinary {
     param(
         [string]$AppName,
         [string]$EntryPoint,
-        [string]$TauriApp,
-        [switch]$Console
+        [string]$TauriApp
     )
 
     $distPath = Join-Path $BuildDir "dist"
@@ -46,12 +45,10 @@ function New-SidecarBinary {
     }
     New-Item -ItemType Directory -Force $binaryDir | Out-Null
 
-    $consoleMode = if ($Console) { "--console" } else { "--noconsole" }
-
     & $VenvDir\Scripts\python.exe -m PyInstaller `
         --clean `
         --onefile `
-        $consoleMode `
+        --noconsole `
         --name $AppName `
         --paths (Join-Path $RootDir "python") `
         --distpath $distPath `
@@ -80,7 +77,7 @@ if (-not (Test-Path $VenvDir)) {
 & $VenvDir\Scripts\python.exe -m pip install --upgrade pip
 & $VenvDir\Scripts\python.exe -m pip install pyinstaller
 
-New-SidecarBinary -AppName "ship-sender-backend" -EntryPoint "python\ship_sender_app.py" -TauriApp "sender" -Console
+New-SidecarBinary -AppName "ship-sender-backend" -EntryPoint "python\ship_sender_app.py" -TauriApp "sender"
 New-SidecarBinary -AppName "ship-manager-backend" -EntryPoint "python\ship_manager_app.py" -TauriApp "manager"
 
 foreach ($app in @("sender", "manager", "log-viewer")) {

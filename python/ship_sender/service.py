@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import sqlite3
-import sys
 from pathlib import Path
 from typing import Any, Dict
 
@@ -89,7 +88,7 @@ def bobs_job(job: str) -> Dict[str, Any]:
 
 
 def _debug_history(message: str) -> None:
-    print(f"[HISTORY-DEBUG] {message}", file=sys.stderr, flush=True)
+    print(f"[HISTORY-DEBUG] {message}", flush=True)
 
 
 def _file_size(db_file: Path) -> int | str:

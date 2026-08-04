@@ -31,10 +31,22 @@ def test_resolve_ship_db_file_uses_env_directory(monkeypatch, tmp_path: Path) ->
     db_dir = tmp_path / "ship_db"
     monkeypatch.setenv("SHIP_DB_DIR", str(db_dir))
 
-    db_file = resolve_ship_db_file()
+    db_file = resolve_ship_db_file(())
 
     assert db_file == db_dir / "shipments.sqlite3"
     assert not db_dir.exists()
+
+
+def test_resolve_ship_db_file_prefers_existing_candidate_when_env_db_is_missing(monkeypatch, tmp_path: Path) -> None:
+    env_dir = tmp_path / "env" / "ship_db"
+    mounted_dir = tmp_path / "mounted" / "ship_db"
+    mounted_dir.mkdir(parents=True)
+    (mounted_dir / "shipments.sqlite3").write_bytes(b"db")
+    monkeypatch.setenv("SHIP_DB_DIR", str(env_dir))
+
+    db_file = resolve_ship_db_file((env_dir, mounted_dir))
+
+    assert db_file == mounted_dir / "shipments.sqlite3"
 
 
 def test_resolve_ship_db_file_uses_first_existing_candidate(monkeypatch, tmp_path: Path) -> None:

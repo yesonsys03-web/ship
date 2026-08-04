@@ -19,6 +19,7 @@ const HEALTH_HTTP_TIMEOUT: Duration = Duration::from_millis(900);
 const HISTORY_HTTP_TIMEOUT: Duration = Duration::from_secs(2);
 const MUTATION_HTTP_TIMEOUT: Duration = Duration::from_secs(120);
 const WINDOWS_SHIP_DB_DIR: &str = "//Mserver/USA_DB/test_jn/ship_db";
+const WINDOWS_SHIP_DB_DIR_BACKSLASH: &str = r"\\Mserver\USA_DB\test_jn\ship_db";
 
 static BACKEND_STARTUP_LOCK: Mutex<()> = Mutex::new(());
 
@@ -217,9 +218,12 @@ fn spawn_backend(app: &tauri::AppHandle, port: u16) -> Result<(), String> {
     let command = sidecar
         .args(["--parent-pid".to_string(), std::process::id().to_string()])
         .env("SHIP_SENDER_HOST", BACKEND_HOST)
-        .env("SHIP_SENDER_PORT", port.to_string());
+        .env("SHIP_SENDER_PORT", port.to_string())
+        .env("PYTHONUNBUFFERED", "1");
     #[cfg(windows)]
-    let command = command.env("SHIP_DB_DIR", WINDOWS_SHIP_DB_DIR);
+    let command = command
+        .env("SHIP_DB_DIR", WINDOWS_SHIP_DB_DIR)
+        .env("SHIP_DB_DIR_BACKSLASH", WINDOWS_SHIP_DB_DIR_BACKSLASH);
 
     let (mut rx, child) = command.spawn().map_err(|error| {
         let message = format!("전송 백엔드를 시작하지 못했습니다: {error}");
@@ -600,6 +604,10 @@ mod tests {
     #[test]
     fn windows_sidecar_db_dir_uses_forward_slash_unc_path() {
         assert_eq!(WINDOWS_SHIP_DB_DIR, "//Mserver/USA_DB/test_jn/ship_db");
+        assert_eq!(
+            WINDOWS_SHIP_DB_DIR_BACKSLASH,
+            r"\\Mserver\USA_DB\test_jn\ship_db"
+        );
     }
 
     #[test]

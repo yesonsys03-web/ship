@@ -22,6 +22,7 @@ export type SenderDbHealth = {
   parent_exists: boolean;
   history_count: number;
   error?: string;
+  diagnostics?: string[];
 };
 
 export type SenderHealth = {

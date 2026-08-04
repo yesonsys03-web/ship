@@ -118,7 +118,8 @@ function getSenderDbDiagnostic(senderHealth: SenderHealth | null, healthError: s
     const fileStatus = senderHealth.db.exists ? '파일 있음' : '파일 없음';
     const parentStatus = senderHealth.db.parent_exists ? '상위 폴더 있음' : '상위 폴더 없음';
     const dbError = senderHealth.db.error ? ` · DB 오류: ${senderHealth.db.error}` : '';
-    return `DB: ${dbPath} · ${fileStatus} · ${parentStatus} · 기록 ${senderHealth.db.history_count}개${dbError}`;
+    const diagnostics = senderHealth.db.diagnostics?.length ? ` · 진단: ${senderHealth.db.diagnostics.join(' / ')}` : '';
+    return `DB: ${dbPath} · ${fileStatus} · ${parentStatus} · 기록 ${senderHealth.db.history_count}개${dbError}${diagnostics}`;
   }
 
   if (healthError) {

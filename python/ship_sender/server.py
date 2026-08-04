@@ -12,7 +12,7 @@ from typing import Any, Dict, Sequence, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from .config import SENDER_ALLOWED_ORIGINS, SENDER_HOST, SENDER_MAX_REQUEST_BYTES, SENDER_PORT
-from .service import bobs_job, bobs_jobs, db_status, log_generate, parse_bobs_pdf, scan, send, sent_history
+from .service import bobs_job, bobs_jobs, db_status, log_generate, log_startup_db_diagnostic, parse_bobs_pdf, scan, send, sent_history
 from ship_common.db_path import resolve_ship_db_file
 from ship_common.shipment_db import ShipmentDatabase
 from ship_common.thumbnails import get_thumbnail_bytes
@@ -204,7 +204,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parent_pid = parse_parent_pid(argv)
     server = ThreadingHTTPServer((SENDER_HOST, SENDER_PORT), SenderHandler)
     start_parent_watchdog(server, parent_pid)
-    print(f"ship sender backend listening on http://{SENDER_HOST}:{SENDER_PORT}")
+    print(f"ship sender backend listening on http://{SENDER_HOST}:{SENDER_PORT}", flush=True)
+    log_startup_db_diagnostic()
     server.serve_forever()
 
 

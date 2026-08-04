@@ -285,6 +285,22 @@ def test_db_status_reports_shared_db_path_and_history_count(monkeypatch, tmp_pat
     assert status["history_count"] == 1
 
 
+def test_db_status_includes_path_diagnostics(monkeypatch, tmp_path: Path) -> None:
+    db_dir = tmp_path / "missing" / "ship_db"
+    windows_dir = tmp_path / "windows" / "ship_db"
+    monkeypatch.setenv("SHIP_DB_DIR", str(db_dir))
+    monkeypatch.setattr(service, "WINDOWS_SHIP_DB_DIR_CANDIDATES", (windows_dir,))
+
+    status = service.db_status()
+
+    assert status["path"] == str(db_dir / "shipments.sqlite3")
+    assert status["history_count"] == 0
+    diagnostics = status["diagnostics"]
+    assert any(str(db_dir / "shipments.sqlite3") in line for line in diagnostics)
+    assert any("windows_candidate_1_dir" in line and str(windows_dir) in line for line in diagnostics)
+    assert any("stat=error" in line for line in diagnostics)
+
+
 def test_send_groups_shared_db_by_folder_label_date(monkeypatch, tmp_path: Path) -> None:
     manifest = ShipmentManifest(
         id="ship-folder-date",

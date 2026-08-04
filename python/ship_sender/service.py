@@ -8,7 +8,7 @@ from typing import Any, Dict
 from .bobs_catalog import bobs_catalog_job, bobs_catalog_jobs
 from .bobs_retake_pdf import parse_bobs_retake_pdf
 from ship_common.audit_log import write_manifest_audit_event
-from ship_common.db_path import resolve_ship_db_file
+from ship_common.db_path import SHIP_DB_FILENAME, WINDOWS_SHIP_DB_DIR_CANDIDATES, resolve_ship_db_file
 from ship_common.manifest import create_manifest
 from ship_common.models import ShipmentManifest
 from ship_common.shipment_db import ShipmentDatabase
@@ -67,9 +67,10 @@ def db_status() -> Dict[str, Any]:
         "path": str(db_file),
         "exists": db_file.exists(),
         "parent_exists": db_file.parent.exists(),
+        "history_count": 0,
+        "diagnostics": db_path_diagnostics(db_file),
     }
     if not db_file.exists():
-        status["history_count"] = 0
         return status
 
     try:
@@ -89,6 +90,44 @@ def bobs_job(job: str) -> Dict[str, Any]:
 
 def _debug_history(message: str) -> None:
     print(f"[HISTORY-DEBUG] {message}", flush=True)
+
+
+def log_startup_db_diagnostic() -> None:
+    db_file = resolve_ship_db_file()
+    _debug_history("startup DB diagnostic begin")
+    for line in db_path_diagnostics(db_file):
+        _debug_history(f"startup {line}")
+    _debug_history("startup DB diagnostic end")
+
+
+def db_path_diagnostics(db_file: Path | None = None) -> list[str]:
+    resolved_db_file = db_file or resolve_ship_db_file()
+    lines = [
+        f"cwd={os.getcwd()}",
+        f"SHIP_DB_DIR={os.getenv('SHIP_DB_DIR', '')!r}",
+        f"resolved_db_path={resolved_db_file}",
+        _path_status("resolved_db", resolved_db_file),
+        _path_status("resolved_parent", resolved_db_file.parent),
+    ]
+    for index, directory in enumerate(WINDOWS_SHIP_DB_DIR_CANDIDATES, start=1):
+        db_candidate = directory / SHIP_DB_FILENAME
+        lines.append(_path_status(f"windows_candidate_{index}_dir", directory))
+        lines.append(_path_status(f"windows_candidate_{index}_db", db_candidate))
+    return lines
+
+
+def _path_status(label: str, path: Path) -> str:
+    return f"{label}={path} exists={path.exists()} is_file={path.is_file()} is_dir={path.is_dir()} stat={_stat_status(path)}"
+
+
+def _stat_status(path: Path) -> str:
+    try:
+        stat_result = path.stat()
+    except OSError as exc:
+        winerror = getattr(exc, "winerror", None)
+        suffix = f" winerror={winerror}" if winerror is not None else ""
+        return f"error {type(exc).__name__}: {exc}{suffix}"
+    return f"ok size={stat_result.st_size}"
 
 
 def _file_size(db_file: Path) -> int | str:

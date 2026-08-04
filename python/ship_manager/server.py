@@ -146,17 +146,10 @@ def save_persisted_thumbnail_bytes(shipment_id: str, file_path: str, thumbnail: 
 
 
 def watch_parent_process(server: BaseServer, parent_pid: int, interval: float = 1.0) -> None:
-    parent_seen = os.getppid() == parent_pid
     while True:
         try:
             os.kill(parent_pid, 0)
         except OSError:
-            server.shutdown()
-            return
-        current_parent_pid = os.getppid()
-        if current_parent_pid == parent_pid:
-            parent_seen = True
-        elif parent_seen:
             server.shutdown()
             return
         time.sleep(interval)

@@ -42,13 +42,15 @@ def test_watchdog_shuts_down_when_parent_pid_is_missing(monkeypatch: pytest.Monk
 
 
 @pytest.mark.parametrize("server_module", [sender_server, manager_server])
-def test_watchdog_shuts_down_when_initial_parent_reparents(monkeypatch: pytest.MonkeyPatch, server_module: ModuleType) -> None:
+def test_watchdog_keeps_running_when_parent_pid_exists_after_reparent(monkeypatch: pytest.MonkeyPatch, server_module: ModuleType) -> None:
     server = RecordingServer()
     parent_pids = iter([12345, 1])
 
     monkeypatch.setattr(server_module.os, "getppid", lambda: next(parent_pids))
     monkeypatch.setattr(server_module.os, "kill", lambda pid, signal: None)
+    monkeypatch.setattr(server_module.time, "sleep", lambda interval: (_ for _ in ()).throw(StopIteration))
 
-    server_module.watch_parent_process(server, 12345, interval=0)
+    with pytest.raises(StopIteration):
+        server_module.watch_parent_process(server, 12345, interval=0)
 
-    assert server.shutdown_calls == 1
+    assert server.shutdown_calls == 0

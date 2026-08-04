@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -28,10 +29,11 @@ INTERNAL_JOB_NAME_SUFFIXES = ("TEST", "INTERNAL")
 
 
 def bobs_catalog_jobs(roots: Iterable[Path] = BOBS_CATALOG_ROOTS) -> Dict[str, Any]:
+    _debug_bobs("GET /bobs/catalog/jobs")
     root, warnings = resolve_bobs_catalog_root(roots)
     jobs_db_path = root / JOBS_DB_RELATIVE_PATH if root is not None else None
     jobs = list_bobs_jobs(root, warnings) if root is not None else []
-    return {
+    payload = {
         "environment": BOBS_ENVIRONMENT,
         "root": str(root) if root is not None else None,
         "jobs_db_path": str(jobs_db_path) if jobs_db_path is not None else None,
@@ -39,9 +41,12 @@ def bobs_catalog_jobs(roots: Iterable[Path] = BOBS_CATALOG_ROOTS) -> Dict[str, A
         "jobs": jobs,
         "warnings": warnings,
     }
+    _debug_bobs(f"jobs payload root={payload['root']} jobs={len(jobs)} warnings={warnings}")
+    return payload
 
 
 def bobs_catalog_job(job: str, roots: Iterable[Path] = BOBS_CATALOG_ROOTS) -> Dict[str, Any]:
+    _debug_bobs(f"GET /bobs/catalog/job job={job}")
     root, warnings = resolve_bobs_catalog_root(roots)
     if root is None:
         return _empty_job_detail(job, None, "catalog_root_missing", warnings)
@@ -67,7 +72,7 @@ def bobs_catalog_job(job: str, roots: Iterable[Path] = BOBS_CATALOG_ROOTS) -> Di
         scenes, scene_warnings, status = read_scene_names(scene_db_path)
         warnings.extend(scene_warnings)
         scene_source = "scene_db"
-    return {
+    payload = {
         "environment": BOBS_ENVIRONMENT,
         "job": job,
         "root": str(root),
@@ -79,15 +84,31 @@ def bobs_catalog_job(job: str, roots: Iterable[Path] = BOBS_CATALOG_ROOTS) -> Di
         "sequences": sequences_for_scenes(scenes),
         "warnings": warnings,
     }
+    _debug_bobs(
+        f"job payload job={job} root={payload['root']} scene_db_path={payload['scene_db_path']} "
+        f"status={status} scene_source={scene_source} scenes={len(scenes)} warnings={warnings}"
+    )
+    return payload
 
 
 def resolve_bobs_catalog_root(roots: Iterable[Path] = BOBS_CATALOG_ROOTS) -> Tuple[Path | None, List[str]]:
     checked_roots: List[str] = []
     for root in roots:
         checked_roots.append(str(root))
-        if (root / "db_jobs").is_dir() or (root / JOBS_DB_RELATIVE_PATH).is_file():
+        db_jobs_dir = root / "db_jobs"
+        jobs_db_path = root / JOBS_DB_RELATIVE_PATH
+        db_jobs_exists = db_jobs_dir.is_dir()
+        jobs_db_exists = jobs_db_path.is_file()
+        _debug_bobs(
+            f"root candidate={root} db_jobs={db_jobs_dir} is_dir={db_jobs_exists} "
+            f"jobs_db={jobs_db_path} is_file={jobs_db_exists}"
+        )
+        if db_jobs_exists or jobs_db_exists:
+            _debug_bobs(f"selected root={root}")
             return root, []
-    return None, [f"Bobs catalog root not found; checked: {', '.join(checked_roots)}"]
+    warning = f"Bobs catalog root not found; checked: {', '.join(checked_roots)}"
+    _debug_bobs(warning)
+    return None, [warning]
 
 
 def list_bobs_jobs(root: Path, warnings: List[str] | None = None) -> List[str]:
@@ -101,20 +122,25 @@ def list_bobs_jobs(root: Path, warnings: List[str] | None = None) -> List[str]:
 def _list_db_jobs_directory(root: Path) -> List[str]:
     jobs_root = root / "db_jobs"
     if not jobs_root.is_dir():
+        _debug_bobs(f"db_jobs directory missing or inaccessible: {jobs_root}")
         return []
     jobs = [path.name for path in jobs_root.iterdir() if path.is_dir() and is_bobs_job_name(path.name)]
+    _debug_bobs(f"db_jobs directory scanned: {jobs_root} jobs={jobs}")
     return sorted(jobs, key=natural_sort_key)
 
 
 def read_jobs_db_catalog(jobs_db_path: Path) -> Tuple[Dict[str, Any], List[str]]:
     empty_catalog: Dict[str, Any] = {"jobs": set(), "scenes_by_job": {}}
+    _debug_bobs(f"jobs.db check path={jobs_db_path} exists={jobs_db_path.exists()} is_file={jobs_db_path.is_file()}")
     if not jobs_db_path.exists():
         return empty_catalog, []
     if not jobs_db_path.is_file():
         return empty_catalog, [f"jobs.db path is not a file: {jobs_db_path}"]
 
     try:
-        connection = sqlite3.connect(jobs_db_path.resolve().as_uri() + "?mode=ro", uri=True)
+        uri = jobs_db_path.resolve().as_uri() + "?mode=ro"
+        _debug_bobs(f"jobs.db sqlite open uri={uri}")
+        connection = sqlite3.connect(uri, uri=True)
     except sqlite3.DatabaseError as exc:
         jobs = _read_binary_job_names(jobs_db_path)
         if jobs:
@@ -142,13 +168,16 @@ def read_jobs_db_catalog(jobs_db_path: Path) -> Tuple[Dict[str, Any], List[str]]
 
 
 def read_scene_names(scene_db_path: Path) -> Tuple[List[str], List[str], str]:
+    _debug_bobs(f"scene.db check path={scene_db_path} exists={scene_db_path.exists()} is_file={scene_db_path.is_file()}")
     if not scene_db_path.exists():
         return [], [f"scene.db missing: {scene_db_path}"], "scene_db_missing"
     if not scene_db_path.is_file():
         return [], [f"scene.db path is not a file: {scene_db_path}"], "scene_db_invalid"
 
     try:
-        connection = sqlite3.connect(scene_db_path.resolve().as_uri() + "?mode=ro", uri=True)
+        uri = scene_db_path.resolve().as_uri() + "?mode=ro"
+        _debug_bobs(f"scene.db sqlite open uri={uri}")
+        connection = sqlite3.connect(uri, uri=True)
     except sqlite3.DatabaseError as exc:
         return _read_binary_scene_names(scene_db_path, f"scene.db is not readable SQLite: {exc}")
     except sqlite3.Error as exc:
@@ -170,6 +199,7 @@ def read_scene_names(scene_db_path: Path) -> Tuple[List[str], List[str], str]:
 
 
 def _read_binary_scene_names(scene_db_path: Path, sqlite_warning: str) -> Tuple[List[str], List[str], str]:
+    _debug_bobs(f"scene.db binary fallback path={scene_db_path} reason={sqlite_warning}")
     try:
         data = scene_db_path.read_bytes()
     except OSError as exc:
@@ -260,6 +290,7 @@ def _scene_tokens(value: str) -> set[str]:
 
 
 def _read_binary_job_names(jobs_db_path: Path) -> set[str]:
+    _debug_bobs(f"jobs.db binary fallback path={jobs_db_path}")
     try:
         data = jobs_db_path.read_bytes()
     except OSError:
@@ -318,3 +349,7 @@ def _empty_job_detail(job: str, scene_db_path: Path | None, status: str, warning
         "sequences": {},
         "warnings": warnings,
     }
+
+
+def _debug_bobs(message: str) -> None:
+    print(f"[BOBS-DEBUG] {message}", file=sys.stderr, flush=True)

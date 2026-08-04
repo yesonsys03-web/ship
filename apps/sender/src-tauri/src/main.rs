@@ -1,5 +1,3 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 use serde_json::{json, Value};
 use std::collections::VecDeque;
 use std::io::{Read, Write};
@@ -46,7 +44,18 @@ fn sender_health(app: tauri::AppHandle) -> Result<Value, String> {
 #[tauri::command(async)]
 fn sender_history(app: tauri::AppHandle) -> Result<Value, String> {
     let port = ensure_backend(&app)?;
-    proxy_json(port, "GET", "/history", None, HISTORY_HTTP_TIMEOUT)
+    eprintln!("[HISTORY-DEBUG] tauri sender_history port={port}");
+    match proxy_json(port, "GET", "/history", None, HISTORY_HTTP_TIMEOUT) {
+        Ok(value) => {
+            let count = value.as_array().map_or(0, Vec::len);
+            eprintln!("[HISTORY-DEBUG] tauri sender_history ok count={count}");
+            Ok(value)
+        }
+        Err(error) => {
+            eprintln!("[HISTORY-DEBUG] tauri sender_history error={error}");
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command(async)]

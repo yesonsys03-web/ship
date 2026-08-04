@@ -442,16 +442,20 @@ fn parse_status_code(status_line: &str) -> Result<u16, String> {
 }
 
 fn format_backend_status_error(status: u16, body: &str) -> String {
-    let backend_error = serde_json::from_str::<Value>(body)
-        .ok()
-        .and_then(|value| {
-            value
-                .get("error")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        })
-        .unwrap_or_else(|| truncate_for_diagnostic(body, 240));
+    if let Some(backend_error) = backend_error_from_status_body(body) {
+        return backend_error;
+    }
+    let backend_error = truncate_for_diagnostic(body, 240);
     format!("전송 백엔드 요청이 실패했습니다(HTTP {status}): {backend_error}")
+}
+
+fn backend_error_from_status_body(body: &str) -> Option<String> {
+    serde_json::from_str::<Value>(body).ok().and_then(|value| {
+        value
+            .get("error")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+    })
 }
 
 fn backend_diagnostics(app: &tauri::AppHandle) -> String {
@@ -563,7 +567,15 @@ mod tests {
     fn extracts_backend_error_from_json_status_body() {
         assert_eq!(
             format_backend_status_error(400, "{\"error\":\"bad folder\"}"),
-            "전송 백엔드 요청이 실패했습니다(HTTP 400): bad folder"
+            "bad folder"
+        );
+    }
+
+    #[test]
+    fn keeps_backend_prefix_for_non_json_status_body() {
+        assert_eq!(
+            format_backend_status_error(500, "not-json"),
+            "전송 백엔드 요청이 실패했습니다(HTTP 500): not-json"
         );
     }
 

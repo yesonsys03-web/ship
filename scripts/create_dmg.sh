@@ -74,10 +74,11 @@ convert_dmg() {
   local source_dmg="$1"
   local output_dmg="$2"
   local attempt
+  local max_attempts="${SHIP_DMG_CONVERT_MAX_ATTEMPTS:-12}"
   local retry_delay="${SHIP_DMG_CONVERT_RETRY_DELAY:-5}"
   local convert_log="$TMP_DIR/convert.log"
 
-  for attempt in 1 2 3 4 5; do
+  for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
     if hdiutil convert "$source_dmg" -format UDZO -imagekey zlib-level=9 -o "$output_dmg" > /dev/null 2>"$convert_log"; then
       return 0
     fi
@@ -87,12 +88,12 @@ convert_dmg() {
       return 1
     fi
 
-    if [ "$attempt" -eq 5 ]; then
+    if [ "$attempt" -eq "$max_attempts" ]; then
       cat "$convert_log" >&2
       return 1
     fi
 
-    printf 'hdiutil convert busy, retrying attempt %s/5: %s\n' "$((attempt + 1))" "$output_dmg" >&2
+    printf 'hdiutil convert busy, retrying attempt %s/%s: %s\n' "$((attempt + 1))" "$max_attempts" "$output_dmg" >&2
     sync
     sleep "$retry_delay"
   done

@@ -62,7 +62,7 @@ class CreateDmgTests(unittest.TestCase):
                     fi
                     count=$((count + 1))
                     printf '%s' "$count" > "$count_file"
-                    if [ "$count" -eq 1 ]; then
+                    if [ "$count" -lt 8 ]; then
                       printf 'hdiutil: convert failed - Resource temporarily unavailable\n' >&2
                       exit 1
                     fi
@@ -107,7 +107,7 @@ class CreateDmgTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual((state_dir / "convert-count").read_text(encoding="utf-8"), "2")
+            self.assertEqual((state_dir / "convert-count").read_text(encoding="utf-8"), "8")
             self.assertEqual(output_dmg.read_text(encoding="utf-8"), "dmg")
 
 

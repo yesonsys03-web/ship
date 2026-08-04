@@ -6,23 +6,8 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-const SHIP_DB_FILENAME: &str = "shipments.sqlite3";
-const WINDOWS_SHIP_DB_DIR_CANDIDATES: [&str; 5] = [
-    "//Mserver/USA_DB/test_jn/ship_db",
-    "\\\\Mserver\\USA_DB\\test_jn\\ship_db",
-    "/System/Volumes/Data/USA_DB/test_jn/ship_db",
-    "/USA_DB/test_jn/ship_db",
-    "/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db",
-];
-#[cfg(windows)]
-const SHIP_DB_DIR_CANDIDATES: [&str; 5] = WINDOWS_SHIP_DB_DIR_CANDIDATES;
-#[cfg(not(windows))]
-const SHIP_DB_DIR_CANDIDATES: [&str; 4] = [
-    "/System/Volumes/Data/USA_DB/test_jn/ship_db",
-    "/USA_DB/test_jn/ship_db",
-    "//Mserver/USA_DB/test_jn/ship_db",
-    "/System/Volumes/Data/mnt/USA_DB/test_jn/ship_db",
-];
+const APP_DATA_DIR_NAME: &str = "Ship";
+const AUDIT_LOG_DIR_NAME: &str = "audit_logs";
 const MAX_MALFORMED_SAMPLES: usize = 20;
 const MAX_ENRICHED_FILES: usize = 80;
 const MAX_RECURSIVE_DIRS: usize = 96;
@@ -82,32 +67,84 @@ fn read_audit_log_entries(date: String) -> Result<AuditLogReadResult, String> {
 }
 
 fn default_audit_log_dir() -> PathBuf {
-    if let Ok(configured_dir) = std::env::var("SHIP_DB_DIR") {
+    audit_log_dir_from_configured_env(
+        std::env::var("SHIP_AUDIT_LOG_DIR").ok(),
+        local_audit_log_dir(),
+    )
+}
+
+fn audit_log_dir_from_configured_env(
+    configured_dir: Option<String>,
+    local_dir: Option<PathBuf>,
+) -> PathBuf {
+    if let Some(configured_dir) = configured_dir {
         let trimmed = configured_dir.trim();
         if !trimmed.is_empty() {
             return PathBuf::from(trimmed);
         }
     }
 
-    let candidates: Vec<PathBuf> = SHIP_DB_DIR_CANDIDATES.iter().map(PathBuf::from).collect();
-    resolve_ship_db_dir_from_candidates(&candidates)
-        .unwrap_or_else(|| PathBuf::from("data/ship_db"))
+    local_dir.unwrap_or_else(|| {
+        PathBuf::from("data")
+            .join(APP_DATA_DIR_NAME)
+            .join(AUDIT_LOG_DIR_NAME)
+    })
 }
 
-fn resolve_ship_db_dir_from_candidates(candidates: &[PathBuf]) -> Option<PathBuf> {
-    let existing_directories: Vec<PathBuf> = candidates
-        .iter()
-        .filter(|directory| directory.exists())
-        .cloned()
-        .collect();
+#[cfg(windows)]
+fn local_audit_log_dir() -> Option<PathBuf> {
+    std::env::var("LOCALAPPDATA")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            std::env::var("APPDATA")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .map(|directory| {
+            PathBuf::from(directory)
+                .join(APP_DATA_DIR_NAME)
+                .join(AUDIT_LOG_DIR_NAME)
+        })
+}
 
-    for directory in &existing_directories {
-        if directory.join(SHIP_DB_FILENAME).exists() {
-            return Some(directory.clone());
+#[cfg(target_os = "macos")]
+fn local_audit_log_dir() -> Option<PathBuf> {
+    std::env::var("HOME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|home| {
+            PathBuf::from(home)
+                .join("Library")
+                .join("Application Support")
+                .join(APP_DATA_DIR_NAME)
+                .join(AUDIT_LOG_DIR_NAME)
+        })
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
+fn local_audit_log_dir() -> Option<PathBuf> {
+    if let Ok(data_home) = std::env::var("XDG_DATA_HOME") {
+        let trimmed = data_home.trim();
+        if !trimmed.is_empty() {
+            return Some(
+                PathBuf::from(trimmed)
+                    .join(APP_DATA_DIR_NAME)
+                    .join(AUDIT_LOG_DIR_NAME),
+            );
         }
     }
 
-    existing_directories.into_iter().next()
+    std::env::var("HOME")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|home| {
+            PathBuf::from(home)
+                .join(".local")
+                .join("share")
+                .join(APP_DATA_DIR_NAME)
+                .join(AUDIT_LOG_DIR_NAME)
+        })
 }
 
 fn list_audit_log_dates_in(log_dir: &Path) -> Result<Vec<AuditLogDate>, String> {
@@ -644,44 +681,37 @@ mod tests {
     }
 
     #[test]
-    fn resolves_db_dir_from_first_candidate_with_db_file() {
-        let first = make_temp_log_dir("candidate-first");
-        let second = make_temp_log_dir("candidate-second");
-        fs::write(first.join(SHIP_DB_FILENAME), "db").expect("first db should write");
-        fs::write(second.join(SHIP_DB_FILENAME), "db").expect("second db should write");
-        let candidates = vec![first.clone(), second.clone()];
+    fn configured_audit_log_dir_overrides_local_default() {
+        let configured = PathBuf::from("/tmp/configured-audit");
+        let local = PathBuf::from("/tmp/local-audit");
 
         assert_eq!(
-            resolve_ship_db_dir_from_candidates(&candidates),
-            Some(first.clone())
+            audit_log_dir_from_configured_env(
+                Some(configured.to_string_lossy().to_string()),
+                Some(local)
+            ),
+            configured
         );
-
-        fs::remove_dir_all(first).expect("first temp dir should be removed");
-        fs::remove_dir_all(second).expect("second temp dir should be removed");
     }
 
     #[test]
-    fn resolves_db_dir_from_first_existing_candidate_when_db_missing() {
-        let first = make_temp_log_dir("candidate-existing-first");
-        let second = make_temp_log_dir("candidate-existing-second");
-        let candidates = vec![first.clone(), second.clone()];
+    fn blank_configured_audit_log_dir_uses_local_default() {
+        let local = PathBuf::from("/tmp/local-audit");
 
         assert_eq!(
-            resolve_ship_db_dir_from_candidates(&candidates),
-            Some(first.clone())
+            audit_log_dir_from_configured_env(Some("  ".to_string()), Some(local.clone())),
+            local
         );
-
-        fs::remove_dir_all(first).expect("first temp dir should be removed");
-        fs::remove_dir_all(second).expect("second temp dir should be removed");
     }
 
     #[test]
-    fn windows_candidates_prefer_forward_slash_unc_path() {
+    fn missing_local_audit_log_dir_uses_project_fallback() {
         assert_eq!(
-            WINDOWS_SHIP_DB_DIR_CANDIDATES[0],
-            "//Mserver/USA_DB/test_jn/ship_db"
+            audit_log_dir_from_configured_env(None, None),
+            PathBuf::from("data")
+                .join(APP_DATA_DIR_NAME)
+                .join(AUDIT_LOG_DIR_NAME)
         );
-        assert!(WINDOWS_SHIP_DB_DIR_CANDIDATES.contains(&"\\\\Mserver\\USA_DB\\test_jn\\ship_db"));
     }
 
     #[test]

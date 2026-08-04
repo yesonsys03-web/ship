@@ -9,11 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
-from .db_path import SHIP_DB_DIR_CANDIDATES, resolve_ship_db_file
 from .models import ShipmentManifest
 
 
 DEFAULT_HOSTS_FILE = Path("/etc/hosts")
+APP_DATA_DIR_NAME = "Ship"
+AUDIT_LOG_DIR_NAME = "audit_logs"
 
 
 def write_manifest_audit_event(action: str, manifest_payload: Dict[str, Any], **metadata: Any) -> None:
@@ -58,9 +59,27 @@ def build_manifest_audit_entry(action: str, manifest: ShipmentManifest, metadata
     }
 
 
-def audit_log_dir(candidates = SHIP_DB_DIR_CANDIDATES) -> Path:
+def audit_log_dir() -> Path:
     configured = os.environ.get("SHIP_AUDIT_LOG_DIR", "").strip()
-    return Path(configured) if configured else resolve_ship_db_file(candidates).parent
+    if configured:
+        return Path(configured)
+    return local_audit_log_dir()
+
+
+def local_audit_log_dir() -> Path:
+    if os.name == "nt":
+        app_data = os.environ.get("LOCALAPPDATA", "").strip() or os.environ.get("APPDATA", "").strip()
+        if app_data:
+            return Path(app_data) / APP_DATA_DIR_NAME / AUDIT_LOG_DIR_NAME
+
+    home = Path.home()
+    if sys.platform == "darwin":
+        return home / "Library" / "Application Support" / APP_DATA_DIR_NAME / AUDIT_LOG_DIR_NAME
+
+    data_home = os.environ.get("XDG_DATA_HOME", "").strip()
+    if data_home:
+        return Path(data_home) / APP_DATA_DIR_NAME / AUDIT_LOG_DIR_NAME
+    return home / ".local" / "share" / APP_DATA_DIR_NAME / AUDIT_LOG_DIR_NAME
 
 
 def detect_current_host() -> Dict[str, str]:

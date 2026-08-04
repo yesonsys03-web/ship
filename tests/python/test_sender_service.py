@@ -7,7 +7,6 @@ import pytest
 
 from ship_common import audit_log
 from ship_common import shipment_db
-from ship_common.db_path import SHIP_DB_FILENAME, resolve_ship_db_file
 from ship_common.models import FileEntry, ShipmentManifest
 from ship_sender import service
 from ship_sender import server as sender_server
@@ -73,19 +72,29 @@ def test_send_writes_host_ip_audit_log(monkeypatch, tmp_path: Path) -> None:
     assert entries[0]["hostname_source"] == "hosts"
 
 
-def test_default_audit_log_dir_follows_resolved_ship_db_dir(monkeypatch, tmp_path: Path) -> None:
+def test_default_audit_log_dir_uses_local_app_data_not_shared_db_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("SHIP_AUDIT_LOG_DIR", raising=False)
-    first_candidate = tmp_path / "System" / "Volumes" / "Data" / "USA_DB" / "test_jn" / "ship_db"
-    second_candidate = tmp_path / "USA_DB" / "test_jn" / "ship_db"
-    first_candidate.mkdir(parents=True)
-    second_candidate.mkdir(parents=True)
-    (first_candidate / SHIP_DB_FILENAME).write_text("db", encoding="utf-8")
-    (second_candidate / SHIP_DB_FILENAME).write_text("db", encoding="utf-8")
+    shared_db_dir = tmp_path / "USA_DB" / "test_jn" / "ship_db"
+    local_data_dir = tmp_path / "local-data"
 
-    candidates = (first_candidate, second_candidate)
+    monkeypatch.setenv("SHIP_DB_DIR", str(shared_db_dir))
+    monkeypatch.setenv("XDG_DATA_HOME", str(local_data_dir))
+    monkeypatch.setattr(audit_log.os, "name", "posix")
+    monkeypatch.setattr(audit_log.sys, "platform", "linux")
 
-    assert resolve_ship_db_file(candidates).parent == first_candidate
-    assert audit_log.audit_log_dir(candidates) == first_candidate
+    assert audit_log.audit_log_dir() == local_data_dir / "Ship" / "audit_logs"
+    assert audit_log.audit_log_dir() != shared_db_dir
+
+
+def test_windows_default_audit_log_dir_uses_local_app_data(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("SHIP_AUDIT_LOG_DIR", raising=False)
+    local_app_data = tmp_path / "LocalAppData"
+
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
+    monkeypatch.setenv("APPDATA", str(tmp_path / "RoamingAppData"))
+    monkeypatch.setattr(audit_log.os, "name", "nt")
+
+    assert audit_log.audit_log_dir() == local_app_data / "Ship" / "audit_logs"
 
 
 def test_log_generate_writes_metadata_and_falls_back_without_hosts_entry(monkeypatch, tmp_path: Path) -> None:

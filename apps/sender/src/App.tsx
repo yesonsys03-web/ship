@@ -134,6 +134,16 @@ function mergeSentHistory(sentManifests: ShipmentManifest[], currentHistory: Shi
   return [...sentManifests, ...currentHistory.filter((manifest) => !sentIds.has(manifest.id))];
 }
 
+function getNormalSendQueueSignature(manifests: ShipmentManifest[]) {
+  return JSON.stringify(manifests.map((manifest) => ({
+    id: manifest.id,
+    source_path: manifest.source_path,
+    folder_name: manifest.folder_name,
+    created_at: manifest.created_at,
+    files: manifest.files.map((file) => ({ path: file.path, size: file.size, is_dir: file.is_dir })),
+  })));
+}
+
 function getMillisecondsUntilTomorrow() {
   const now = new Date();
   const tomorrow = new Date(now);
@@ -360,6 +370,27 @@ function getDisplayFolderName(folderName: string) {
     return kingOfHillTitle;
   }
   return folderName;
+}
+
+function getWorkColorClassName(value: string) {
+  const displayTitle = getDisplayFolderName(value);
+  if (value.includes('헤즈빈호텔') || displayTitle.startsWith('헤즈빈호텔')) {
+    return 'work-color-hazbin';
+  }
+  if (value.includes(floridaTitle) || displayTitle.startsWith(floridaTitle)) {
+    return 'work-color-florida';
+  }
+  if (value.includes('밥스버거') || displayTitle.startsWith('밥스버거')) {
+    return 'work-color-bobs';
+  }
+  if (value.includes(kingOfHillTitle) || displayTitle.startsWith(kingOfHillTitle)) {
+    return 'work-color-koth';
+  }
+  return 'work-color-default';
+}
+
+function getManifestWorkColorClassName(manifest: ShipmentManifest) {
+  return getWorkColorClassName(getManifestDisplayTitle(manifest));
 }
 
 function getManifestDisplayTitles(manifest: ShipmentManifest) {
@@ -1095,6 +1126,7 @@ export default function App() {
   const [lastBobsSceneRangeAnchor, setLastBobsSceneRangeAnchor] = useState<BobsRangeAnchor | null>(null);
   const [pendingBobsRevisionManifestId, setPendingBobsRevisionManifestId] = useState<string | null>(null);
   const [pendingNormalRevisionManifestId, setPendingNormalRevisionManifestId] = useState<string | null>(null);
+  const [lastNormalSentQueueSignature, setLastNormalSentQueueSignature] = useState<string | null>(null);
   const [isLoadingBobsJobs, setIsLoadingBobsJobs] = useState(false);
   const [loadingBobsJobDetails, setLoadingBobsJobDetails] = useState<string[]>([]);
   const [isBusy, setIsBusy] = useState(false);
@@ -1292,7 +1324,9 @@ export default function App() {
     [manifests],
   );
   const queuedManifestsForNormalSend = senderMode === 'transfer' ? visibleTransferManifests : manifests;
-  const isNormalSendDisabled = queuedManifestsForNormalSend.length === 0 || isBusy || isBobsRevisionPending || isNormalRevisionPending || isBobsHistoryRevisionContext;
+  const normalSendQueueSignature = useMemo(() => getNormalSendQueueSignature(queuedManifestsForNormalSend), [queuedManifestsForNormalSend]);
+  const isNormalSendUnchangedSinceLastSend = queuedManifestsForNormalSend.length > 0 && normalSendQueueSignature === lastNormalSentQueueSignature;
+  const isNormalSendDisabled = queuedManifestsForNormalSend.length === 0 || isBusy || isNormalSendUnchangedSinceLastSend || isBobsRevisionPending || isNormalRevisionPending || isBobsHistoryRevisionContext;
   const isRevisionSendDisabled = isBusy || !hasRevisionContext || (isBobsHistoryRevisionContext && !canCreateDirectBobsRevision);
   const bobsWarningsMessage = getBobsWarningsMessage([
     ...bobsJobWarnings,
@@ -1860,6 +1894,10 @@ export default function App() {
       setStatus('먼저 폴더를 드래그앤드롭하세요.');
       return;
     }
+    if (isNormalSendUnchangedSinceLastSend) {
+      setStatus('목록이 바뀌지 않아 다시 전송하지 않습니다.');
+      return;
+    }
     await sendQueuedManifests(queuedManifestsForNormalSend, 'normal');
   }
 
@@ -1938,6 +1976,8 @@ export default function App() {
         setPendingNormalRevisionManifestId(null);
         setActiveHistoryManifestId(firstSentManifest.id);
         setActiveManifestId(firstSentManifest.id);
+      } else {
+        setLastNormalSentQueueSignature(getNormalSendQueueSignature(manifestsToSend));
       }
       const message = sendMode === 'revision'
         ? `${getManifestDisplayTitle(firstSentManifest)} 수정전송이 완료되었습니다.`
@@ -2188,7 +2228,7 @@ export default function App() {
                       onClick={() => handleSelectQueuedManifest(manifest)}
                       type="button"
                     >
-                      <strong>{getManifestDisplayTitle(manifest)}</strong>
+                      <strong className={getManifestWorkColorClassName(manifest)}>{getManifestDisplayTitle(manifest)}</strong>
                       <span>{countFiles(manifest.files)}개 파일</span>
                     </button>
                   );
@@ -2292,7 +2332,7 @@ export default function App() {
                   >
                     {isNew && <span className="history-new-badge">NEW</span>}
                     <span className="history-main">
-                      <strong>{renderSearchHighlightedText(getManifestDisplayTitle(manifest), historySearchHighlightQuery)}</strong>
+                      <strong className={getManifestWorkColorClassName(manifest)}>{renderSearchHighlightedText(getManifestDisplayTitle(manifest), historySearchHighlightQuery)}</strong>
                       {historySearchHighlightQuery.trim() !== '' && !isBobsManifest(manifest) && <span className="history-source-path">{renderSearchHighlightedText(manifest.source_path, historySearchHighlightQuery)}</span>}
                       {sourceDateFolderLabel && <span className="history-source-date">선적 날짜 {sourceDateFolderLabel}</span>}
                     </span>
@@ -2315,7 +2355,7 @@ export default function App() {
         <section className="contents-column contents-card">
           <div className="card-heading">
             <div>
-              <h2>{activeManifest ? renderSearchHighlightedText(activeManifestDisplayTitle, activeHistorySearchQuery) : '전송할 폴더 내용'}</h2>
+              <h2 className={activeManifest ? getManifestWorkColorClassName(activeManifest) : 'work-color-default'}>{activeManifest ? renderSearchHighlightedText(activeManifestDisplayTitle, activeHistorySearchQuery) : '전송할 폴더 내용'}</h2>
               {activeManifestDateFolderLabel && <p className="source-date-context">선적 날짜 <strong>{activeManifestDateFolderLabel}</strong></p>}
             </div>
             <span>{activeManifest ? `${countFiles(activeManifest.files)}개 파일` : '대기 중'}</span>

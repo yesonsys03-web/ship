@@ -20,6 +20,10 @@ from ship_sender.bobs_retake_pdf import (
 from ship_sender import server as sender_server
 
 
+def get_css_rule(source: str, selector: str) -> str:
+    return source.split(f"{selector} {{", 1)[1].split("}", 1)[0]
+
+
 def test_parse_bobs_retake_text_normalizes_scene_suffix_for_catalog_matching() -> None:
     result = parse_bobs_retake_text(
         """
@@ -321,6 +325,27 @@ def test_sender_frontend_koth_promo_paths_display_specific_episode_title() -> No
     assert "^킹오브더힐 (?:15|16)" in manifest_titles_body
 
 
+def test_sender_frontend_work_color_classes_apply_to_titles_and_files_foreground_only() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    folder_contents_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "components" / "FolderContents.tsx").read_text()
+    styles_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "styles.css").read_text()
+    app_color_body = app_source.split("function getWorkColorClassName", 1)[1].split("function getManifestWorkColorClassName", 1)[0]
+    file_color_body = folder_contents_source.split("function getWorkColorClassName", 1)[1].split("function getDisplayPath", 1)[0]
+
+    for class_name in ["work-color-hazbin", "work-color-florida", "work-color-bobs", "work-color-koth", "work-color-default"]:
+        assert class_name in app_color_body
+        assert class_name in file_color_body
+        rule = get_css_rule(styles_source, f".{class_name}")
+        assert rule.strip().startswith("color: var(--work-color-")
+        assert "background" not in rule
+        assert "border" not in rule
+        assert "box-shadow" not in rule
+
+    assert "getManifestWorkColorClassName(manifest)" in app_source
+    assert "className={activeManifest ? getManifestWorkColorClassName(activeManifest) : 'work-color-default'}" in app_source
+    assert "className={`file-path ${getWorkColorClassName(file.path)}`}" in folder_contents_source
+
+
 def test_sender_frontend_bobs_mixed_tk_generation_does_not_lock_review_to_first_tk() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     auto_apply_body = app_source.split("const nextBobsManifests = autoBobsGeneratedQueue.manifests", 1)[1].split("}, [activeHistoryManifestId", 1)[0]
@@ -385,6 +410,20 @@ def test_sender_frontend_history_selection_blocks_bobs_auto_generation() -> None
     assert "activeHistoryManifestId" in app_source.split("const nextBobsManifests = autoBobsGeneratedQueue.manifests", 1)[1].split("]);", 1)[0]
     assert "if (!isBobsManifest(manifest))" in select_history_body
     assert "setSenderMode('transfer')" in select_history_body
+
+
+def test_sender_frontend_normal_send_disables_until_queue_changes() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    disabled_body = app_source.split("const queuedManifestsForNormalSend", 1)[1].split("const isRevisionSendDisabled", 1)[0]
+    send_body = app_source.split("async function handleSend", 1)[1].split("async function handleSendRevision", 1)[0]
+    send_queued_body = app_source.split("async function sendQueuedManifests", 1)[1].split("return (", 1)[0]
+
+    assert "function getNormalSendQueueSignature" in app_source
+    assert "const [lastNormalSentQueueSignature, setLastNormalSentQueueSignature]" in app_source
+    assert "normalSendQueueSignature === lastNormalSentQueueSignature" in disabled_body
+    assert "isNormalSendUnchangedSinceLastSend" in disabled_body
+    assert "목록이 바뀌지 않아 다시 전송하지 않습니다." in send_body
+    assert "setLastNormalSentQueueSignature(getNormalSendQueueSignature(manifestsToSend))" in send_queued_body
 
 
 def test_parse_bobs_retake_pdf_prefers_pdf_due_date_over_excel_ship_date(tmp_path: Path) -> None:

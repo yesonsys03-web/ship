@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import type { ShipmentManifest, ShipmentSummary, ShipmentTree } from '../api';
-import { getDisplayFolderName, getShipmentNavigationTitle } from '../shipmentTitles';
+import { getDisplayFolderName, getShipmentNavigationTitle, getWorkColorClassName } from '../shipmentTitles';
 
 type HighlightPart = string | ReactElement;
 
@@ -178,7 +178,7 @@ export function LeftNavigator({
                         onClick={() => onSelect(shipment)}
                       >
                         <span className="nav-title-line">
-                          <em>{renderHighlightedText(navigationTitle, searchQuery)}</em>
+                          <em className={getWorkColorClassName(navigationTitle)}>{renderHighlightedText(navigationTitle, searchQuery)}</em>
                           {isNewShipment && <span className="new-badge" aria-label="새 선적">NEW</span>}
                         </span>
                         <span className="nav-file-count">{renderHighlightedText(`${shipment.file_count}개 파일`, searchQuery)}</span>

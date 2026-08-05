@@ -73,6 +73,11 @@
   --history-new-badge-offset: calc(var(--control-border-strong) * -1);
   --history-new-badge-clearance: 24px;
   --preview-size: 32px;
+  --work-color-hazbin: #8b1111;
+  --work-color-florida: #1d6f78;
+  --work-color-bobs: #a45116;
+  --work-color-koth: #2d5f26;
+  --work-color-default: var(--ink);
   --card-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.12);
   --contents-shadow: 0 24px 60px rgba(var(--shadow-rgb), 0.16), -18px 0 0 rgba(var(--line-rgb), 0.32);
   --preview-shadow: 0 6px 12px rgba(var(--shadow-rgb), 0.12);
@@ -99,6 +104,11 @@ button, input, textarea, select { font: inherit; }
 .drop-zone h2, .drop-zone p { width: 100%; max-width: 100%; word-break: keep-all; overflow-wrap: break-word; }
 .drop-zone h2 { margin: 0 0 var(--control-gap-tight); font-size: var(--drop-heading-size); line-height: 1.25; }
 .pulse { color: var(--accent-dark); }
+.work-color-hazbin { color: var(--work-color-hazbin); }
+.work-color-florida { color: var(--work-color-florida); }
+.work-color-bobs { color: var(--work-color-bobs); }
+.work-color-koth { color: var(--work-color-koth); }
+.work-color-default { color: var(--work-color-default); }
 .bobs-card, .edit-panel, .date-card, .transfer-panel, .sent-history-card, .sender-mode-switch { padding: 18px; }
 .edit-panel { display: grid; gap: 18px; }
 .sender-mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--control-gap-tight); margin: 0; border-left: var(--accent-border-width) solid var(--action); background: linear-gradient(135deg, rgba(var(--line-rgb), 0.18), rgba(var(--paper-rgb), 0.92)); }

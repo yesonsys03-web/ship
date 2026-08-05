@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import { getGeneratedThumbnailUrl, type ShipmentManifest } from '../api';
-import { getBasename, getManifestDisplayTitle, getPathSegments, getWorkTitle } from '../shipmentTitles';
+import { getBasename, getManifestDisplayTitle, getPathSegments, getWorkColorClassName, getWorkTitle } from '../shipmentTitles';
 
 type HighlightPart = string | ReactElement;
 
@@ -381,7 +381,7 @@ export function ContentPanel({ manifest, searchQuery }: ContentPanelProps) {
       <div className="panel-heading">
         <div>
           <p className="eyebrow">{new Date(manifest.created_at).toLocaleDateString('ko-KR')}</p>
-          <h2>{renderHighlightedText(getManifestDisplayTitle(manifest), searchQuery)}</h2>
+          <h2 className={getWorkColorClassName(getManifestDisplayTitle(manifest))}>{renderHighlightedText(getManifestDisplayTitle(manifest), searchQuery)}</h2>
           {sourceDateFolderLabel && <p className="source-date-context">선적 날짜 <strong>{renderHighlightedText(sourceDateFolderLabel, searchQuery)}</strong></p>}
           <p>{renderHighlightedText(manifest.source_path, searchQuery)}</p>
         </div>
@@ -460,7 +460,7 @@ export function ContentPanel({ manifest, searchQuery }: ContentPanelProps) {
               )}
               {!preview && !isFolder && <span className="file-preview-placeholder" aria-hidden="true">파일</span>}
               <span className="file-kind" aria-label={isFolder ? '폴더' : '파일'}>{isFolder ? '▣ 폴더' : '문서 파일'}</span>
-              <strong className="file-path">{renderHighlightedText(displayPath, searchQuery)}</strong>
+              <strong className={`file-path ${getWorkColorClassName(file.path)}`}>{renderHighlightedText(displayPath, searchQuery)}</strong>
               {dateFolderSummary && <span className="date-folder-summary">{renderHighlightedText(dateFolderSummary, searchQuery)}</span>}
               {showInlineSummary && <span className="folder-inline-summary" role="status">{renderHighlightedText(getFolderInlineSummary(row), searchQuery)}</span>}
               <em className="file-size">{renderHighlightedText(isFolder ? `파일 ${row.descendantFileCount || countDescendantFiles(file, manifest.files)}개` : formatFileSize(file.size), searchQuery)}</em>

@@ -152,6 +152,24 @@ export function getWorkTitle(path: string) {
   return getMappedWorkTitle(path) || getPathSegments(path)[0] || path;
 }
 
+export function getWorkColorClassName(value: string) {
+  const mappedTitle = getMappedWorkTitle(value);
+  const workTitle = mappedTitle || getPathSegments(value)[0] || value;
+  if (value.includes('헤즈빈호텔') || workTitle.startsWith('헤즈빈호텔')) {
+    return 'work-color-hazbin';
+  }
+  if (value.includes(floridaTitle) || workTitle.startsWith(floridaTitle)) {
+    return 'work-color-florida';
+  }
+  if (value.includes('밥스버거') || workTitle.startsWith('밥스버거') || isBobsValue(value)) {
+    return 'work-color-bobs';
+  }
+  if (value.includes(kingOfHillTitle) || workTitle.startsWith(kingOfHillTitle)) {
+    return 'work-color-koth';
+  }
+  return 'work-color-default';
+}
+
 function getBobsManifestDisplayTitle(manifest: ShipmentManifest) {
   const title = manifest.folder_name.trim();
   const sources = [manifest.folder_name, manifest.source_path, ...manifest.files.map((file) => file.path)];

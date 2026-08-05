@@ -166,6 +166,23 @@ function getWorkTitle(path: string) {
   return segments[0] ?? path;
 }
 
+function getWorkColorClassName(path: string) {
+  const workTitle = getWorkTitle(path);
+  if (path.includes('헤즈빈호텔') || workTitle.startsWith('헤즈빈호텔')) {
+    return 'work-color-hazbin';
+  }
+  if (path.includes(floridaTitle) || workTitle.startsWith(floridaTitle)) {
+    return 'work-color-florida';
+  }
+  if (path.includes('밥스버거') || workTitle.startsWith('밥스버거')) {
+    return 'work-color-bobs';
+  }
+  if (path.includes(kingOfHillTitle) || workTitle.startsWith(kingOfHillTitle)) {
+    return 'work-color-koth';
+  }
+  return 'work-color-default';
+}
+
 function getDisplayPath(path: string) {
   const workTitle = getWorkTitle(path);
   const basename = getDisplayFileName(getBasename(path));
@@ -481,7 +498,7 @@ export function FolderContents({ backendBaseUrl, shipmentId, sourcePath, files, 
             {!preview && !isFolder && <span className="file-preview-placeholder" aria-hidden="true">파일</span>}
             <span className="file-kind" aria-label={isFolder ? '폴더' : '파일'}>{isFolder ? '▣ 폴더' : '문서 파일'}</span>
             <span className="file-text">
-              <strong className="file-path">{renderHighlightedText(displayPath, normalizedHighlightQuery)}</strong>
+              <strong className={`file-path ${getWorkColorClassName(file.path)}`}>{renderHighlightedText(displayPath, normalizedHighlightQuery)}</strong>
               {searchContext && <span className="file-search-context">{renderHighlightedText(searchContext, normalizedHighlightQuery)}</span>}
             </span>
             {dateFolderSummary && <span className="date-folder-summary">{dateFolderSummary}</span>}

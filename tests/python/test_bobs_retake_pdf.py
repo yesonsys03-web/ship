@@ -314,6 +314,24 @@ def test_sender_frontend_fl_paths_display_as_florida_for_date_folder_drops() -> 
     assert "return floridaTitle" in work_title_body
 
 
+def test_sender_frontend_hazbin_date_folder_drop_uses_source_path_for_title() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    display_folder_name_body = app_source.split("function getDisplayFolderName", 1)[1].split("function getManifestDisplayTitles", 1)[0]
+    manifest_titles_body = app_source.split("function getManifestDisplayTitles", 1)[1].split("function getManifestDisplayTitle", 1)[0]
+    source_path = "/Volumes/bgfinal/bgfinal2/BG_PSD/Hazbin_Hotel/HH0305/260804"
+    episode_segment = next(segment for segment in source_path.split("/") if segment.startswith("HH"))
+    episode = episode_segment.removeprefix("HH").lstrip("0")
+
+    assert source_path.rsplit("/", 1)[1] == "260804"
+    assert f"헤즈빈호텔 {episode}화" == "헤즈빈호텔 305화"
+    assert "function getHazbinEpisode" in app_source
+    assert "value.match(/HH0?(\\d{3})(?=\\D|$)/i)?.[1]" in app_source
+    assert "segments.map(getHazbinEpisode)" in display_folder_name_body
+    assert "`헤즈빈호텔 ${hazbinEpisode}화`" in display_folder_name_body
+    assert "const sources = [manifest.folder_name, manifest.source_path, ...manifest.files.map((file) => file.path)];" in manifest_titles_body
+    assert manifest_titles_body.index("return [getBobsManifestDisplayTitle(manifest)]") < manifest_titles_body.index("const sources = [manifest.folder_name, manifest.source_path")
+
+
 def test_sender_frontend_koth_promo_paths_display_specific_episode_title() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     display_folder_name_body = app_source.split("function getDisplayFolderName", 1)[1].split("function getManifestDisplayTitles", 1)[0]

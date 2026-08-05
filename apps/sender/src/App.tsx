@@ -410,7 +410,7 @@ function getManifestDisplayTitles(manifest: ShipmentManifest) {
     return [getBobsManifestDisplayTitle(manifest)];
   }
 
-  const sources = [manifest.folder_name, ...manifest.files.map((file) => file.path)];
+  const sources = [manifest.folder_name, manifest.source_path, ...manifest.files.map((file) => file.path)];
   const mappedTitles = sources.map(getDisplayFolderName).filter((title, index) => title !== sources[index]);
   const uniqueTitles = Array.from(new Set(mappedTitles));
   const preferredTitle = uniqueTitles.find((title) => /^킹오브더힐 (?:15|16)/.test(title));

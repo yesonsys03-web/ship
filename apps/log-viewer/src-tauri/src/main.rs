@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -292,6 +292,7 @@ fn read_audit_log_entries_from_dirs(
             log_path_for_date(&log_dirs[0], date).display()
         ));
     }
+    dedupe_audit_entries(&mut entries);
     entries.sort_by(|first, second| second.timestamp.cmp(&first.timestamp));
     Ok(AuditLogReadResult {
         date: date.to_string(),
@@ -390,7 +391,31 @@ fn parse_audit_log_entry(raw_line: &str, line_number: usize) -> Result<AuditLogE
 }
 
 fn is_visible_audit_entry(entry: &AuditLogEntry) -> bool {
-    entry.action.as_deref() == Some("send")
+    matches!(entry.action.as_deref(), Some("send") | Some("revision"))
+}
+
+fn dedupe_audit_entries(entries: &mut Vec<AuditLogEntry>) {
+    let mut seen = HashSet::new();
+    entries.retain(|entry| seen.insert(audit_entry_dedupe_key(entry)));
+}
+
+fn audit_entry_dedupe_key(entry: &AuditLogEntry) -> String {
+    [
+        entry.timestamp.as_deref().unwrap_or(""),
+        entry.action.as_deref().unwrap_or(""),
+        entry.manifest_id.as_deref().unwrap_or(""),
+        entry.folder_name.as_deref().unwrap_or(""),
+        entry.source_path.as_deref().unwrap_or(""),
+        entry.note.as_deref().unwrap_or(""),
+        entry.job.as_deref().unwrap_or(""),
+        entry.tk.as_deref().unwrap_or(""),
+        entry.batch.as_deref().unwrap_or(""),
+        entry.ip.as_deref().unwrap_or(""),
+        entry.hostname.as_deref().unwrap_or(""),
+        entry.hostname_source.as_deref().unwrap_or(""),
+    ]
+    .join("\u{1f}")
+        + &format!("\u{1f}{:?}\u{1f}{:?}", entry.file_count, entry.files)
 }
 
 fn optional_string_array(value: Option<&Value>) -> Option<Vec<String>> {
@@ -944,7 +969,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_only_sent_audit_entries() {
+    fn reads_only_sent_and_revision_audit_entries_without_duplicates() {
         let log_dir = make_temp_log_dir("send-only");
         let generated_line = serde_json::json!({
             "schema_version": 1,
@@ -982,19 +1007,42 @@ mod tests {
             "hostname": "DESKTOP-6PGV457",
             "hostname_source": "socket"
         });
+        let revision_line = serde_json::json!({
+            "schema_version": 1,
+            "timestamp": "2026-08-05T08:02:00Z",
+            "date": "2026-08-05",
+            "action": "revision",
+            "manifest_id": "revision-sent",
+            "folder_name": "밥스버거 FASA05 수정 씬",
+            "source_path": "bobs://Bobs_Burgers/FASA05/batch/01_S01+01_S02+01_S03",
+            "file_count": 3,
+            "files": ["01_S01", "01_S02", "01_S03"],
+            "note": "",
+            "job": "FASA05",
+            "tk": "",
+            "batch": "",
+            "ip": "192.168.0.44",
+            "hostname": "DESKTOP-6PGV457",
+            "hostname_source": "socket"
+        });
         fs::write(
             log_dir.join("2026-08-05.jsonl"),
-            format!("{generated_line}\n{sent_line}\n"),
+            format!("{generated_line}\n{sent_line}\n{sent_line}\n{revision_line}\n"),
         )
         .expect("log file should write");
 
         let result = read_audit_log_entries_from_dirs(&[log_dir.clone()], "2026-08-05")
             .expect("log should read");
 
-        assert_eq!(result.entries.len(), 1);
-        assert_eq!(result.entries[0].action.as_deref(), Some("send"));
+        assert_eq!(result.entries.len(), 2);
+        assert_eq!(result.entries[0].action.as_deref(), Some("revision"));
         assert_eq!(
             result.entries[0].manifest_id.as_deref(),
+            Some("revision-sent")
+        );
+        assert_eq!(result.entries[1].action.as_deref(), Some("send"));
+        assert_eq!(
+            result.entries[1].manifest_id.as_deref(),
             Some("actually-sent")
         );
         fs::remove_dir_all(log_dir).expect("temp log dir should be removed");

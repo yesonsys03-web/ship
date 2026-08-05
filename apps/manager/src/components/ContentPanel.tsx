@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import { getGeneratedThumbnailUrl, type ShipmentManifest } from '../api';
-import { getBasename, getManifestDisplayTitle, getPathSegments, getWorkColorClassName, getWorkTitle } from '../shipmentTitles';
+import { getBasename, getManifestDisplayTitle, getPathSegments, getWorkBackgroundClassName, getWorkColorClassName, getWorkTitle } from '../shipmentTitles';
 
 type HighlightPart = string | ReactElement;
 
@@ -401,7 +401,7 @@ export function ContentPanel({ manifest, searchQuery }: ContentPanelProps) {
           const sceneValidation = !isFolder ? file.scene_validation : undefined;
           return (
             <div
-              className={`file-row ${isFolder ? 'folder-row' : 'file-entry-row'}`}
+              className={`file-row ${isFolder ? 'folder-row' : 'file-entry-row'} ${getWorkBackgroundClassName(file.path)}`}
               key={row.path}
               onBlur={() => {
                 if (isFolder) {

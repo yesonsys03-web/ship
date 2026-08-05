@@ -99,6 +99,41 @@ convert_dmg() {
   done
 }
 
+create_rw_dmg() {
+  local attempt
+  local max_attempts="${SHIP_DMG_CREATE_MAX_ATTEMPTS:-12}"
+  local retry_delay="${SHIP_DMG_CREATE_RETRY_DELAY:-5}"
+  local create_log="$TMP_DIR/create.log"
+
+  for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
+    if hdiutil create \
+      -volname "$VOLUME_NAME" \
+      -srcfolder "$STAGE_DIR" \
+      -fs HFS+ \
+      -fsargs '-c c=64,a=16,e=16' \
+      -format UDRW \
+      -ov \
+      "$RW_DMG" \
+      >/dev/null 2>"$create_log"; then
+      return 0
+    fi
+
+    if ! /usr/bin/grep -Eq 'Resource busy|Resource temporarily unavailable' "$create_log" >/dev/null 2>&1; then
+      cat "$create_log" >&2
+      return 1
+    fi
+
+    if [ "$attempt" -eq "$max_attempts" ]; then
+      cat "$create_log" >&2
+      return 1
+    fi
+
+    printf 'hdiutil create busy, retrying attempt %s/%s: %s\n' "$((attempt + 1))" "$max_attempts" "$RW_DMG" >&2
+    sync
+    sleep "$retry_delay"
+  done
+}
+
 cleanup() {
   if [ "$DETACHED" -eq 0 ]; then
     detach_mount "$MOUNT_DIR" "$DETACH_TARGET" || true
@@ -194,15 +229,7 @@ png += chunk(b'IEND', b'')
 path.write_bytes(png)
 PYIMG
 
-hdiutil create \
-  -volname "$VOLUME_NAME" \
-  -srcfolder "$STAGE_DIR" \
-  -fs HFS+ \
-  -fsargs '-c c=64,a=16,e=16' \
-  -format UDRW \
-  -ov \
-  "$RW_DMG" \
-  >/dev/null
+create_rw_dmg
 
 ATTACH_OUTPUT="$(hdiutil attach "$RW_DMG" -readwrite -noverify -noautoopen -mountpoint "$MOUNT_DIR")"
 while IFS= read -r line; do

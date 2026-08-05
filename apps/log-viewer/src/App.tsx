@@ -122,6 +122,10 @@ function getWorkColorClassName(value: string) {
   return 'work-color-default';
 }
 
+function getWorkBackgroundClassName(value: string) {
+  return getWorkColorClassName(value).replace('work-color-', 'work-bg-');
+}
+
 function getEntryMappedTitle(entry: AuditLogEntry) {
   const sources = [entry.folder_name, ...(entry.files ?? []), entry.source_path].filter((value): value is string => isPresent(value));
   return sources.map(getMappedWorkTitle).find((title) => title !== '') ?? '';
@@ -147,6 +151,11 @@ function getEntryTitle(entry: AuditLogEntry) {
 function getEntryWorkColorClassName(entry: AuditLogEntry) {
   const sources = [getEntryTitle(entry), entry.folder_name, ...(entry.files ?? []), entry.source_path].filter((value): value is string => isPresent(value));
   return sources.map(getWorkColorClassName).find((className) => className !== 'work-color-default') ?? 'work-color-default';
+}
+
+function getEntryWorkBackgroundClassName(entry: AuditLogEntry) {
+  const sources = [getEntryTitle(entry), entry.folder_name, ...(entry.files ?? []), entry.source_path].filter((value): value is string => isPresent(value));
+  return sources.map(getWorkBackgroundClassName).find((className) => className !== 'work-bg-default') ?? 'work-bg-default';
 }
 
 function getHostLabel(entry: AuditLogEntry) {
@@ -387,7 +396,7 @@ function DetailListRow({
       <dd>
         <span className="file-name-list">
           {values.map((value, index) => (
-            <span className={`file-name-chip ${getWorkColorClassName(value)}`} key={`${value}-${index}`}>
+            <span className={`file-name-chip ${getWorkColorClassName(value)} ${getWorkBackgroundClassName(value)}`} key={`${value}-${index}`}>
               {renderValue(value)}
             </span>
           ))}
@@ -438,7 +447,7 @@ function EntryCard({
   };
 
   return (
-    <article className="log-card">
+    <article className={`log-card ${getEntryWorkBackgroundClassName(entry)}`}>
       <div className="log-card-heading">
         <div>
           <p className="action-chip">{renderHighlightedValue(actionLabel)}</p>

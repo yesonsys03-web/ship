@@ -51,7 +51,26 @@ def test_log_viewer_work_color_classes_apply_to_titles_and_files_foreground_only
 
     assert "function getEntryWorkColorClassName" in app_source
     assert "className={getEntryWorkColorClassName(entry)}" in app_source
-    assert "className={`file-name-chip ${getWorkColorClassName(value)}`}" in app_source
+    assert "getWorkColorClassName(value)" in app_source
+
+
+def test_log_viewer_work_background_classes_apply_to_cards_and_file_chips() -> None:
+    app_source = read_source("App.tsx")
+    styles_source = read_source("styles.css")
+    bg_body = app_source.split("function getWorkBackgroundClassName", 1)[1].split("function getEntryMappedTitle", 1)[0]
+
+    assert "replace('work-color-', 'work-bg-')" in bg_body
+    assert "function getEntryWorkBackgroundClassName" in app_source
+    assert "className={`log-card ${getEntryWorkBackgroundClassName(entry)}`}" in app_source
+    assert "className={`file-name-chip ${getWorkColorClassName(value)} ${getWorkBackgroundClassName(value)}`}" in app_source
+
+    for class_name in ["work-bg-hazbin", "work-bg-florida", "work-bg-bobs", "work-bg-koth", "work-bg-default"]:
+        rule = get_css_rule(styles_source, f".{class_name}")
+        assert rule.strip().startswith("background: var(--work-bg-")
+        assert "color: var(--ink)" in rule
+
+    assert ".log-card.work-bg-hazbin" in styles_source
+    assert ".file-name-chip.work-bg-bobs" in styles_source
 
 
 def test_log_viewer_hides_redundant_send_only_checkbox() -> None:

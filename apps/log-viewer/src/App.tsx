@@ -51,6 +51,9 @@ function formatTimestamp(timestamp: string | undefined) {
 }
 
 function getActionLabel(action: string | undefined) {
+  if (action === 'revision') {
+    return '수정 전송';
+  }
   if (action === 'send') {
     return '전송';
   }
@@ -280,11 +283,11 @@ function scrollMatchIntoPanel(matchElement: HTMLElement, contentPanel: HTMLEleme
 }
 
 function entryIsTransferLog(entry: AuditLogEntry) {
-  return entry.action === 'send';
+  return entry.action === 'send' || entry.action === 'revision';
 }
 
-function entryMatchesAction(entry: AuditLogEntry, showSendOnly: boolean) {
-  return entryIsTransferLog(entry) && (!showSendOnly || entry.action === 'send');
+function entryMatchesAction(entry: AuditLogEntry) {
+  return entryIsTransferLog(entry);
 }
 
 function entryMatchesQuery(entry: AuditLogEntry, normalizedQuery: string) {
@@ -299,7 +302,7 @@ function summarize(result: AuditLogReadResult | null): Summary {
   const hosts = new Set(entries.map((entry) => `${entry.hostname ?? ''}/${entry.ip ?? ''}`).filter((value) => value !== '/'));
   return {
     totalEntries: entries.length,
-    sendCount: entries.filter((entry) => entry.action === 'send').length,
+    sendCount: entries.length,
     totalFiles: entries.reduce((total, entry) => total + (entry.file_count ?? 0), 0),
     hostCount: hosts.size,
   };
@@ -427,7 +430,6 @@ export default function App() {
   const [entriesError, setEntriesError] = useState('');
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
-  const [showSendOnly, setShowSendOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
   const contentPanelRef = useRef<HTMLElement | null>(null);
@@ -502,9 +504,9 @@ export default function App() {
   const filteredEntries = useMemo(() => {
     const entries = result?.entries ?? [];
     return entries.filter(
-      (entry) => entryMatchesAction(entry, showSendOnly) && entryMatchesQuery(entry, normalizedSearchQuery),
+      (entry) => entryMatchesAction(entry) && entryMatchesQuery(entry, normalizedSearchQuery),
     );
-  }, [normalizedSearchQuery, result, showSendOnly]);
+  }, [normalizedSearchQuery, result]);
   const searchNavigation = useMemo(() => {
     let nextMatchIndex = 0;
     const entries = filteredEntries.map((entry) => {
@@ -538,7 +540,7 @@ export default function App() {
 
   useEffect(() => {
     setActiveMatchIndex(0);
-  }, [filteredEntries, normalizedSearchQuery, selectedDate, showSendOnly]);
+  }, [filteredEntries, normalizedSearchQuery, selectedDate]);
 
   useEffect(() => {
     matchElementsRef.current.length = totalMatchCount;
@@ -564,10 +566,6 @@ export default function App() {
           <p className="subtitle">전송 기록을 날짜별로 확인합니다.</p>
         </div>
         <div className="topbar-controls" aria-label="로그 필터와 새로고침">
-          <label className="filter-check">
-            <input type="checkbox" checked={showSendOnly} onChange={(event) => setShowSendOnly(event.currentTarget.checked)} />
-            <span>전송한것만 보기</span>
-          </label>
           <div className="search-field">
             <label htmlFor="log-search-input">로그 검색</label>
             <div className="search-input-row">

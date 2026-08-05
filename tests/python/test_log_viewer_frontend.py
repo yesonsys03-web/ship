@@ -6,7 +6,7 @@ LOG_VIEWER_SRC = ROOT / "apps" / "log-viewer" / "src"
 
 
 def read_source(relative_path: str) -> str:
-    return (LOG_VIEWER_SRC / relative_path).read_text()
+    return (LOG_VIEWER_SRC / relative_path).read_text(encoding="utf-8")
 
 
 def test_log_viewer_maps_florida_files_inside_date_folder_to_korean_title() -> None:
@@ -30,3 +30,16 @@ def test_log_viewer_search_includes_mapped_florida_title() -> None:
     search_values_body = app_source.split("function getEntrySearchValues", 1)[1].split("function getEntryVisibleTextValues", 1)[0]
 
     assert "getEntryMappedTitle(entry)" in search_values_body
+
+
+def test_log_viewer_hides_redundant_send_only_checkbox() -> None:
+    source = read_source("App.tsx")
+
+    assert "전송한것만 보기" not in source
+    assert "showSendOnly" not in source
+
+
+def test_log_viewer_labels_revision_sends() -> None:
+    source = read_source("App.tsx")
+
+    assert "수정 전송" in source

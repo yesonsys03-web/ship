@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -44,6 +46,59 @@ def test_find_generated_thumbnail_reports_non_png_outputs(tmp_path: Path) -> Non
     message = str(exc_info.value)
     assert "cut.tiff" in message
     assert str(output_dir) in message
+
+
+def test_get_thumbnail_bytes_uses_psd_tools_preview_before_quick_look(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_dir = tmp_path / "source"
+    cache_dir = tmp_path / "cache"
+    source_dir.mkdir()
+    psd = source_dir / "art.psd"
+    psd.write_bytes(b"psd")
+
+    class FakeImage:
+        def convert(self, mode: str):
+            assert mode == "RGBA"
+            return self
+
+        def thumbnail(self, size: tuple[int, int]) -> None:
+            assert size == (320, 320)
+
+        def save(self, output_path: Path, format: str) -> None:
+            assert format == "PNG"
+            output_path.write_bytes(PNG_SIGNATURE + b"psd-tools-preview")
+
+    class FakePsd:
+        def thumbnail(self):
+            return FakeImage()
+
+        def topil(self, apply_icc: bool = True):
+            raise AssertionError("embedded thumbnail should be used first")
+
+        def composite(self, apply_icc: bool = True):
+            raise AssertionError("embedded thumbnail should be used first")
+
+    class FakePSDImage:
+        @staticmethod
+        def open(target: Path):
+            assert target == psd.resolve()
+            return FakePsd()
+
+    fake_module = ModuleType("psd_tools")
+    fake_module.PSDImage = FakePSDImage
+
+    def fail_quick_look(*args, **kwargs):
+        raise AssertionError("Quick Look should not run when psd-tools returns a preview")
+
+    monkeypatch.setattr(thumbnails, "THUMBNAIL_CACHE_DIR", cache_dir)
+    monkeypatch.setitem(sys.modules, "psd_tools", fake_module)
+    monkeypatch.setattr(thumbnails.subprocess, "run", fail_quick_look)
+
+    body = thumbnails.get_thumbnail_bytes(str(source_dir), "art.psd")
+
+    assert body == PNG_SIGNATURE + b"psd-tools-preview"
 
 
 def test_get_thumbnail_bytes_uses_design_placeholder_after_quick_look_failure(

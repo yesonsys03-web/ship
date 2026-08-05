@@ -55,7 +55,11 @@ def get_thumbnail_bytes(source_path: str, file_path: str) -> bytes:
         output_root = Path(output_dir)
         failures: list[str] = []
         try:
-            generated_thumbnail = _generate_quick_look_thumbnail(target, output_root, failures)
+            generated_thumbnail = (
+                _generate_design_thumbnail(target, output_root, failures)
+                if _is_design_thumbnail(target)
+                else _generate_quick_look_thumbnail(target, output_root, failures)
+            )
         except RuntimeError as exc:
             if _is_video_thumbnail(target):
                 generated_thumbnail = output_root / "video-placeholder.png"
@@ -75,6 +79,41 @@ def get_design_placeholder_thumbnail_bytes(file_path: str) -> bytes:
         output_path = Path(output_dir) / "design-placeholder.png"
         _write_design_placeholder_thumbnail(target, output_path, [])
         return output_path.read_bytes()
+
+
+def _generate_design_thumbnail(target: Path, output_root: Path, failures: list[str]) -> Path:
+    try:
+        return _generate_psd_tools_thumbnail(target, output_root / "psd-tools")
+    except RuntimeError as exc:
+        failures.append(f"psd-tools: {exc}")
+
+    return _generate_quick_look_thumbnail(target, output_root, failures)
+
+
+def _generate_psd_tools_thumbnail(target: Path, output_dir: Path) -> Path:
+    try:
+        from psd_tools import PSDImage
+    except ImportError as exc:
+        raise RuntimeError("psd-tools is not installed") from exc
+
+    try:
+        psd = PSDImage.open(target)
+        image = psd.thumbnail() or psd.topil(apply_icc=True) or psd.composite(apply_icc=True)
+        if image is None:
+            raise RuntimeError("PSD has no embedded thumbnail, preview, or composite image")
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / f"{target.stem}.png"
+        png_image = image.convert("RGBA")
+        png_image.thumbnail((320, 320))
+        png_image.save(output_path, format="PNG")
+        if not _is_png_file(output_path):
+            raise RuntimeError("psd-tools output was not PNG")
+        return output_path
+    except Exception as exc:
+        if isinstance(exc, RuntimeError):
+            raise
+        raise RuntimeError(f"{type(exc).__name__}: {exc}") from exc
 
 
 def _cache_path(target: Path) -> Path:

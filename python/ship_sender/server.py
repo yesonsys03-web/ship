@@ -58,7 +58,7 @@ class SenderHandler(BaseHTTPRequestHandler):
                     if source_path:
                         try:
                             thumbnail = get_thumbnail_bytes(source_path, file_path)
-                        except Exception:
+                        except (FileNotFoundError, RuntimeError):
                             if file_path.lower().endswith((".psd", ".psb")):
                                 thumbnail = get_design_placeholder_thumbnail_bytes(file_path)
                             else:

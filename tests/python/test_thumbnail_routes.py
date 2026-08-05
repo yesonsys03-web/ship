@@ -83,6 +83,43 @@ def test_sender_thumbnail_route_uses_design_placeholder_without_source_path(
     assert sent["json"] is None
 
 
+def test_sender_thumbnail_route_rejects_invalid_design_file_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    handler_class = sender_server.SenderHandler
+    handler = object.__new__(handler_class)
+    handler.path = "/thumbnail?source_path=/source&file_path=../poster.psd"
+    handler.headers = SimpleNamespace(get=lambda key, default=None: default)
+    handler.client_address = ("127.0.0.1", 12345)
+
+    sent = {"bytes": None, "content_type": None, "status": None, "json": None}
+
+    def fake_send_bytes(self, body: bytes, content_type: str, status: int = 200) -> None:
+        sent["bytes"] = body
+        sent["content_type"] = content_type
+        sent["status"] = status
+
+    def fake_send_json(self, payload, status: int = 200) -> None:
+        sent["json"] = (payload, status)
+
+    def reject_thumbnail(source_path: str, file_path: str) -> bytes:
+        raise ValueError("invalid file path")
+
+    def unexpected_placeholder(file_path: str) -> bytes:
+        raise AssertionError("invalid design paths must not become placeholders")
+
+    monkeypatch.setattr(sender_server, "get_persisted_thumbnail_bytes", lambda shipment_id, file_path: None)
+    monkeypatch.setattr(sender_server, "get_thumbnail_bytes", reject_thumbnail)
+    monkeypatch.setattr(sender_server, "get_design_placeholder_thumbnail_bytes", unexpected_placeholder)
+    monkeypatch.setattr(handler_class, "_send_bytes", fake_send_bytes)
+    monkeypatch.setattr(handler_class, "_send_json", fake_send_json)
+
+    handler_class.do_GET(handler)
+
+    assert sent["bytes"] is None
+    assert sent["json"] == ({"error": "invalid file path"}, 404)
+
+
 def test_sender_thumbnail_route_uses_design_placeholder_after_source_generation_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

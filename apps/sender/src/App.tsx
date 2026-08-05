@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { BobsCatalogJob, BobsRetakePdfParseResult, BobsRetakePdfRow, SenderHealth, ShipmentManifest } from './api';
-import { fetchBobsCatalogJob, fetchBobsCatalogJobs, fetchSenderHealth, fetchSentHistory, getSenderBackendUrl, logGeneratedManifest, parseBobsRetakePdf, scanFolder, sendManifest } from './api';
+import { fetchBobsCatalogJob, fetchBobsCatalogJobs, fetchSenderHealth, fetchSentHistory, getSenderBackendUrl, parseBobsRetakePdf, scanFolder, sendManifest } from './api';
 import { listenForFolderDrops } from './dragDrop';
 import { notify } from './notifications';
 import { DropZone } from './components/DropZone';
@@ -1101,7 +1101,6 @@ export default function App() {
   const [todayDateLabel, setTodayDateLabel] = useState(formatTodayDateLabel);
   const hydratedBobsManifestIdRef = useRef<string | null>(null);
   const hydratedBobsSelectionManifestIdRef = useRef<string | null>(null);
-  const loggedBobsGenerationSignaturesRef = useRef<Set<string>>(new Set());
   const activeHistoryManifestIdRef = useRef<string | null>(null);
   const sentHistoryRef = useRef<ShipmentManifest[]>([]);
   const handleDroppedPathRef = useRef<(path: string, excelPaths: string[]) => Promise<void>>(async () => undefined);
@@ -1495,14 +1494,6 @@ export default function App() {
     setPendingBobsRevisionManifestId(null);
     setPendingNormalRevisionManifestId(null);
     setActiveManifestId(autoBobsGeneratedQueue.reviewManifest?.id ?? nextBobsManifests[nextBobsManifests.length - 1]?.id ?? null);
-    nextBobsManifests.forEach((manifest) => {
-      const signature = getManifestQueueSignature(manifest);
-      if (loggedBobsGenerationSignaturesRef.current.has(signature)) {
-        return;
-      }
-      loggedBobsGenerationSignaturesRef.current.add(signature);
-      void logBobsGeneration(manifest);
-    });
   }, [activeHistoryManifestId, autoBobsGeneratedQueue, senderMode]);
 
   useEffect(() => {
@@ -1736,18 +1727,6 @@ export default function App() {
     setLastBobsSceneRangeAnchor({ job, value: scene });
   }
 
-  async function logBobsGeneration(manifest: ShipmentManifest) {
-    try {
-      await logGeneratedManifest(manifest, {
-        job: getBobsJobFromManifest(manifest) ?? '',
-        tk: getBobsTkLabelFromManifest(manifest),
-        batch: bobsSelectionMode === 'SEQ' ? bobsTkNumber : '',
-      });
-    } catch (error) {
-      console.warn('밥스버거 목록 생성 감사를 기록하지 못했습니다.', error);
-    }
-  }
-
   async function handleDroppedPath(path: string, excelPaths: string[] = []) {
     if (isLikelyPdfPath(path)) {
       setIsBusy(true);
@@ -1903,7 +1882,6 @@ export default function App() {
         return;
       }
       const revisionManifest = createBobsRevisionManifest(generatedManifest, activeHistoryManifest);
-      void logBobsGeneration(revisionManifest);
       await sendQueuedManifests([revisionManifest], 'revision');
       return;
     }

@@ -125,13 +125,6 @@ export async function sendManifest(manifest: ShipmentManifest): Promise<{ ok: bo
   return postJson<{ ok: boolean }>('/send', manifest);
 }
 
-export async function logGeneratedManifest(manifest: ShipmentManifest, metadata: Record<string, string> = {}): Promise<{ ok: boolean }> {
-  if (isTauriApp) {
-    return invokeJson<{ ok: boolean }>('sender_log_generate', { manifest, metadata });
-  }
-  return postJson<{ ok: boolean }>('/audit/generate', { manifest, metadata });
-}
-
 export async function fetchBobsCatalogJobs(): Promise<BobsCatalogJobs> {
   await ensureSenderBackend();
   return getJson<BobsCatalogJobs>('/bobs/catalog/jobs');

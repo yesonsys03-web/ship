@@ -346,6 +346,36 @@ def test_sender_frontend_work_color_classes_apply_to_titles_and_files_foreground
     assert "className={`file-path ${getWorkColorClassName(file.path)}`}" in folder_contents_source
 
 
+def test_sender_frontend_work_background_classes_apply_to_list_and_file_containers() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    folder_contents_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "components" / "FolderContents.tsx").read_text()
+    styles_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "styles.css").read_text()
+    app_bg_body = app_source.split("function getWorkBackgroundClassName", 1)[1].split("function getManifestWorkColorClassName", 1)[0]
+    file_bg_body = folder_contents_source.split("function getWorkBackgroundClassName", 1)[1].split("function getDisplayPath", 1)[0]
+
+    assert "replace('work-color-', 'work-bg-')" in app_bg_body
+    assert "replace('work-color-', 'work-bg-')" in file_bg_body
+    assert "getManifestWorkBackgroundClassName(manifest)" in app_source
+    assert "className={`queue-item ${getManifestWorkBackgroundClassName(manifest)}${isActive ? ' active' : ''}`}" in app_source
+    assert "className={`history-item ${getManifestWorkBackgroundClassName(manifest)}${isActive ? ' active' : ''}${isNew ? ' is-new' : ''}`}" in app_source
+    assert "className={`file-row ${isFolder ? 'folder-row' : 'file-entry-row'} ${getWorkBackgroundClassName(file.path)}${isSearchMatch ? ' search-match' : ''}`}" in folder_contents_source
+
+    for class_name in ["work-bg-hazbin", "work-bg-florida", "work-bg-bobs", "work-bg-koth", "work-bg-default"]:
+        rule = get_css_rule(styles_source, f".{class_name}")
+        assert rule.strip().startswith("background: var(--work-bg-")
+        assert "color: var(--ink)" in rule
+
+    assert ".queue-item.work-bg-hazbin" in styles_source
+    assert ".history-item.work-bg-bobs" in styles_source
+    assert ".file-row.work-bg-koth" in styles_source
+    assert ".queue-item.work-bg-hazbin:hover" in styles_source
+    assert ".history-item.work-bg-bobs.active" in styles_source
+    assert ".history-item.work-bg-bobs.is-new" in styles_source
+    assert ".file-row.work-bg-koth.search-match" in styles_source
+    assert '.history-item[class*="work-bg-"].is-new.active { color: var(--ink); }' in styles_source
+    assert '.history-item[class*="work-bg-"].is-new.active .history-count { color: var(--secondary-action); }' in styles_source
+
+
 def test_sender_frontend_bobs_mixed_tk_generation_does_not_lock_review_to_first_tk() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     auto_apply_body = app_source.split("const nextBobsManifests = autoBobsGeneratedQueue.manifests", 1)[1].split("}, [activeHistoryManifestId", 1)[0]
@@ -373,17 +403,22 @@ def test_sender_frontend_bobs_retake_pdf_remains_tk_while_normal_seq_uses_batch_
 
 
 
-def test_sender_frontend_normal_revision_drop_requires_fresh_history_selection() -> None:
+def test_sender_frontend_normal_revision_drop_detects_changed_same_date_title_history() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     handle_scan_body = app_source.split("async function handleScan", 1)[1].split("function handleClearQueue", 1)[0]
     select_history_body = app_source.split("function handleSelectSentHistoryManifest", 1)[1].split("function handleSetSenderMode", 1)[0]
     drop_listener_body = app_source.split("listenForFolderDrops", 1)[1].split("}, []);", 1)[0]
 
+    assert "function getNormalRevisionMatchKey" in app_source
+    assert "function findChangedNormalRevisionSourceManifest" in app_source
+    assert "if (dateLabel === '' || displayTitle.trim() === '')" in app_source
+    assert "if (replacementKey === null)" in app_source
+    assert "getNormalRevisionContentSignature(manifest) !== replacementContentSignature" in app_source
     assert "activeHistoryManifestIdRef.current" in handle_scan_body
     assert "sentHistoryRef.current" in handle_scan_body
-    assert "const normalRevisionSourceManifest = selectedNormalRevisionSourceManifest" in handle_scan_body
-    assert "findBestMatchingNonBobsSentHistoryManifest" not in app_source
-    assert "같은 이전 폴더 경로를 감지해" not in app_source
+    assert "const detectedNormalRevisionSourceManifest = findChangedNormalRevisionSourceManifest(nextManifest, sentHistoryRef.current, selectedYear)" in handle_scan_body
+    assert "const normalRevisionSourceManifest = selectedNormalRevisionSourceManifest ?? detectedNormalRevisionSourceManifest" in handle_scan_body
+    assert "같은 선적 날짜/제목의 변경된 목록" in handle_scan_body
     assert "activeHistoryManifestIdRef.current = manifest.id" in select_history_body
     assert "handleDroppedPathRef.current(path, excelPaths)" in drop_listener_body
     assert "setPendingNormalRevisionManifestId(revisionManifest.id)" in handle_scan_body
@@ -415,6 +450,7 @@ def test_sender_frontend_history_selection_blocks_bobs_auto_generation() -> None
 def test_sender_frontend_normal_send_disables_until_queue_changes() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     disabled_body = app_source.split("const queuedManifestsForNormalSend", 1)[1].split("const isRevisionSendDisabled", 1)[0]
+    revision_disabled_body = app_source.split("const isRevisionSendDisabled", 1)[1].split("const bobsWarningsMessage", 1)[0]
     send_body = app_source.split("async function handleSend", 1)[1].split("async function handleSendRevision", 1)[0]
     send_queued_body = app_source.split("async function sendQueuedManifests", 1)[1].split("return (", 1)[0]
 
@@ -422,6 +458,8 @@ def test_sender_frontend_normal_send_disables_until_queue_changes() -> None:
     assert "const [lastNormalSentQueueSignature, setLastNormalSentQueueSignature]" in app_source
     assert "normalSendQueueSignature === lastNormalSentQueueSignature" in disabled_body
     assert "isNormalSendUnchangedSinceLastSend" in disabled_body
+    assert "isNormalRevisionPending" in disabled_body
+    assert "!hasRevisionContext" in revision_disabled_body
     assert "목록이 바뀌지 않아 다시 전송하지 않습니다." in send_body
     assert "setLastNormalSentQueueSignature(getNormalSendQueueSignature(manifestsToSend))" in send_queued_body
 

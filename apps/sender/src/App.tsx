@@ -144,6 +144,10 @@ function getNormalSendQueueSignature(manifests: ShipmentManifest[]) {
   })));
 }
 
+function getNormalRevisionContentSignature(manifest: ShipmentManifest) {
+  return JSON.stringify(manifest.files.map((file) => ({ path: file.path, size: file.size, is_dir: file.is_dir })));
+}
+
 function getMillisecondsUntilTomorrow() {
   const now = new Date();
   const tomorrow = new Date(now);
@@ -389,8 +393,16 @@ function getWorkColorClassName(value: string) {
   return 'work-color-default';
 }
 
+function getWorkBackgroundClassName(value: string) {
+  return getWorkColorClassName(value).replace('work-color-', 'work-bg-');
+}
+
 function getManifestWorkColorClassName(manifest: ShipmentManifest) {
   return getWorkColorClassName(getManifestDisplayTitle(manifest));
+}
+
+function getManifestWorkBackgroundClassName(manifest: ShipmentManifest) {
+  return getWorkBackgroundClassName(getManifestDisplayTitle(manifest));
 }
 
 function getManifestDisplayTitles(manifest: ShipmentManifest) {
@@ -548,6 +560,28 @@ function getManifestDateFolderLabel(manifest: ShipmentManifest, yearContext = ge
     }
   }
   return '';
+}
+
+function getNormalRevisionMatchKey(manifest: ShipmentManifest, yearContext: number | null = getYearFromTimestamp(manifest.created_at)) {
+  const dateLabel = getManifestDateFolderLabel(manifest, yearContext);
+  const displayTitle = getManifestDisplayTitle(manifest);
+  if (dateLabel === '' || displayTitle.trim() === '') {
+    return null;
+  }
+  return `${dateLabel}\u0000${displayTitle}`;
+}
+
+function findChangedNormalRevisionSourceManifest(replacementManifest: ShipmentManifest, sentManifests: ShipmentManifest[], yearContext: number | null) {
+  const replacementKey = getNormalRevisionMatchKey(replacementManifest, yearContext);
+  if (replacementKey === null) {
+    return null;
+  }
+  const replacementContentSignature = getNormalRevisionContentSignature(replacementManifest);
+  return sentManifests.find((manifest) => (
+    !isBobsManifest(manifest)
+    && getNormalRevisionMatchKey(manifest, yearContext) === replacementKey
+    && getNormalRevisionContentSignature(manifest) !== replacementContentSignature
+  )) ?? null;
 }
 
 function formatFolderDateLabel(folderDate: FolderDate) {
@@ -1834,7 +1868,8 @@ export default function App() {
       const nextManifest = await scanFolder(path);
       clearBobsRetakePdfSelection();
       setPendingBobsRevisionManifestId(null);
-      const normalRevisionSourceManifest = selectedNormalRevisionSourceManifest;
+      const detectedNormalRevisionSourceManifest = findChangedNormalRevisionSourceManifest(nextManifest, sentHistoryRef.current, selectedYear);
+      const normalRevisionSourceManifest = selectedNormalRevisionSourceManifest ?? detectedNormalRevisionSourceManifest;
       if (normalRevisionSourceManifest) {
         const revisionManifest = createRevisionReplacementManifest(nextManifest, normalRevisionSourceManifest);
         setPendingNormalRevisionManifestId(revisionManifest.id);
@@ -1849,7 +1884,7 @@ export default function App() {
           setSelectedDay(folderDate.day);
         }
         setSenderMode('transfer');
-        setStatus(`${getManifestDisplayTitle(normalRevisionSourceManifest)} 수정전송용으로 ${getManifestDisplayTitle(revisionManifest)} 목록을 불러왔습니다.`);
+        setStatus(`${getManifestDisplayTitle(normalRevisionSourceManifest)}와 같은 선적 날짜/제목의 변경된 목록을 수정전송용으로 불러왔습니다.`);
         return;
       }
       setPendingNormalRevisionManifestId(null);
@@ -2223,7 +2258,7 @@ export default function App() {
                   return (
                     <button
                       aria-pressed={isActive}
-                      className={`queue-item${isActive ? ' active' : ''}`}
+                      className={`queue-item ${getManifestWorkBackgroundClassName(manifest)}${isActive ? ' active' : ''}`}
                       key={manifest.source_path}
                       onClick={() => handleSelectQueuedManifest(manifest)}
                       type="button"
@@ -2325,7 +2360,7 @@ export default function App() {
                 return (
                   <button
                     aria-pressed={isActive}
-                    className={`history-item${isActive ? ' active' : ''}${isNew ? ' is-new' : ''}`}
+                    className={`history-item ${getManifestWorkBackgroundClassName(manifest)}${isActive ? ' active' : ''}${isNew ? ' is-new' : ''}`}
                     key={manifest.id}
                     onClick={() => handleSelectSentHistoryManifest(manifest)}
                     type="button"

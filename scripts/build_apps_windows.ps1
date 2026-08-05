@@ -23,6 +23,31 @@ function Require-Command {
     }
 }
 
+function Get-WindowsPeSubsystem {
+    param([string]$Path)
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 0x100 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+        throw "$Path is not a valid PE executable."
+    }
+    $peHeaderOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+    $optionalHeaderOffset = $peHeaderOffset + 24
+    $subsystemOffset = $optionalHeaderOffset + 68
+    if ($subsystemOffset + 2 -gt $bytes.Length) {
+        throw "$Path is too small to contain a PE subsystem field."
+    }
+    return [BitConverter]::ToUInt16($bytes, $subsystemOffset)
+}
+
+function Assert-WindowsGuiSubsystem {
+    param([string]$Path)
+
+    $subsystem = Get-WindowsPeSubsystem $Path
+    if ($subsystem -ne 2) {
+        throw "$Path uses PE subsystem $subsystem; expected Windows GUI subsystem (2) to avoid console windows."
+    }
+}
+
 function New-SidecarBinary {
     param(
         [string]$AppName,
@@ -46,7 +71,7 @@ function New-SidecarBinary {
     }
     New-Item -ItemType Directory -Force $binaryDir | Out-Null
 
-    $consoleMode = if ($Console) { "--console" } else { "--noconsole" }
+    $consoleMode = if ($Console) { "--console" } else { "--windowed" }
 
     & $VenvDir\Scripts\python.exe -m PyInstaller `
         --clean `
@@ -63,6 +88,9 @@ function New-SidecarBinary {
         throw "PyInstaller did not produce $pyInstallerOutput"
     }
     Copy-Item -Force $pyInstallerOutput $tauriBinary
+    if (-not $Console) {
+        Assert-WindowsGuiSubsystem $tauriBinary
+    }
     Write-Host "Prepared sidecar: $tauriBinary"
 }
 

@@ -609,9 +609,7 @@ if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
 fi
 
 "$VENV_DIR/bin/python" -m pip install --upgrade pip
-if ! "$VENV_DIR/bin/python" -m PyInstaller --version >/dev/null 2>&1; then
-  "$VENV_DIR/bin/python" -m pip install pyinstaller
-fi
+"$VENV_DIR/bin/python" -m pip install pyinstaller "psd-tools>=1.10,<2"
 
 rm -rf \
   "$BUILD_DIR/dist/ship-sender-backend" \
@@ -621,6 +619,7 @@ rm -rf \
   --clean \
   ${PYINSTALLER_ARCH_ARGS[@]+"${PYINSTALLER_ARCH_ARGS[@]}"} \
   --name ship-sender-backend \
+  --collect-submodules psd_tools \
   --paths "$ROOT_DIR/python" \
   --distpath "$BUILD_DIR/dist" \
   --workpath "$BUILD_DIR/work-sender" \
@@ -631,6 +630,7 @@ rm -rf \
   --clean \
   ${PYINSTALLER_ARCH_ARGS[@]+"${PYINSTALLER_ARCH_ARGS[@]}"} \
   --name ship-manager-backend \
+  --collect-submodules psd_tools \
   --paths "$ROOT_DIR/python" \
   --distpath "$BUILD_DIR/dist" \
   --workpath "$BUILD_DIR/work-manager" \

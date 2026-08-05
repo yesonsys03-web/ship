@@ -78,6 +78,7 @@ function New-SidecarBinary {
         --onefile `
         $consoleMode `
         --name $AppName `
+        --collect-submodules psd_tools `
         --paths (Join-Path $RootDir "python") `
         --distpath $distPath `
         --workpath $workPath `
@@ -106,7 +107,7 @@ if (-not (Test-Path $VenvDir)) {
 }
 
 & $VenvDir\Scripts\python.exe -m pip install --upgrade pip
-& $VenvDir\Scripts\python.exe -m pip install pyinstaller
+& $VenvDir\Scripts\python.exe -m pip install pyinstaller "psd-tools>=1.10,<2"
 
 New-SidecarBinary -AppName "ship-sender-backend" -EntryPoint "python\ship_sender_app.py" -TauriApp "sender"
 New-SidecarBinary -AppName "ship-manager-backend" -EntryPoint "python\ship_manager_app.py" -TauriApp "manager"

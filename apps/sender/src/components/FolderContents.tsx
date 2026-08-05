@@ -183,6 +183,10 @@ function getWorkColorClassName(path: string) {
   return 'work-color-default';
 }
 
+function getWorkBackgroundClassName(path: string) {
+  return getWorkColorClassName(path).replace('work-color-', 'work-bg-');
+}
+
 function getDisplayPath(path: string) {
   const workTitle = getWorkTitle(path);
   const basename = getDisplayFileName(getBasename(path));
@@ -454,7 +458,7 @@ export function FolderContents({ backendBaseUrl, shipmentId, sourcePath, files, 
         const dateFolderSummary = getDateFolderSummary(row);
         return (
           <div
-            className={`file-row ${isFolder ? 'folder-row' : 'file-entry-row'}${isSearchMatch ? ' search-match' : ''}`}
+            className={`file-row ${isFolder ? 'folder-row' : 'file-entry-row'} ${getWorkBackgroundClassName(file.path)}${isSearchMatch ? ' search-match' : ''}`}
             key={row.path}
             style={rowStyle}
           >

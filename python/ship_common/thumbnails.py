@@ -15,6 +15,7 @@ IMAGE_THUMBNAIL_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"
 GENERATED_THUMBNAIL_EXTENSIONS = {"mov", "mp4", "m4v", "webm", "psd", "psb"}
 THUMBNAIL_EXTENSIONS = IMAGE_THUMBNAIL_EXTENSIONS | GENERATED_THUMBNAIL_EXTENSIONS
 VIDEO_THUMBNAIL_EXTENSIONS = {"mov", "mp4", "m4v", "webm"}
+DESIGN_THUMBNAIL_EXTENSIONS = {"psd", "psb"}
 THUMBNAIL_CACHE_DIR = Path(tempfile.gettempdir()) / "ship_sender_thumbnails"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -56,10 +57,14 @@ def get_thumbnail_bytes(source_path: str, file_path: str) -> bytes:
         try:
             generated_thumbnail = _generate_quick_look_thumbnail(target, output_root, failures)
         except RuntimeError as exc:
-            if not _is_video_thumbnail(target):
+            if _is_video_thumbnail(target):
+                generated_thumbnail = output_root / "video-placeholder.png"
+                _write_video_placeholder_thumbnail(target, generated_thumbnail, failures or [str(exc)])
+            elif _is_design_thumbnail(target):
+                generated_thumbnail = output_root / "design-placeholder.png"
+                _write_design_placeholder_thumbnail(target, generated_thumbnail, failures or [str(exc)])
+            else:
                 raise
-            generated_thumbnail = output_root / "video-placeholder.png"
-            _write_video_placeholder_thumbnail(target, generated_thumbnail, failures or [str(exc)])
         shutil.copyfile(generated_thumbnail, cached_thumbnail)
     return cached_thumbnail.read_bytes()
 
@@ -199,6 +204,10 @@ def _is_video_thumbnail(target: Path) -> bool:
     return target.suffix.lower().lstrip(".") in VIDEO_THUMBNAIL_EXTENSIONS
 
 
+def _is_design_thumbnail(target: Path) -> bool:
+    return target.suffix.lower().lstrip(".") in DESIGN_THUMBNAIL_EXTENSIONS
+
+
 def _is_png_file(path: Path) -> bool:
     try:
         with path.open("rb") as file:
@@ -209,8 +218,15 @@ def _is_png_file(path: Path) -> bool:
 
 def _write_video_placeholder_thumbnail(target: Path, output_path: Path, failures: list[str]) -> None:
     del failures
-    width = 160
-    height = 90
+    _write_placeholder_thumbnail(target, output_path, "SHIP video thumbnail fallback", 160, 90)
+
+
+def _write_design_placeholder_thumbnail(target: Path, output_path: Path, failures: list[str]) -> None:
+    del failures
+    _write_placeholder_thumbnail(target, output_path, "SHIP design thumbnail fallback", 160, 120)
+
+
+def _write_placeholder_thumbnail(target: Path, output_path: Path, title: str, width: int, height: int) -> None:
     digest = hashlib.sha256(f"{target.name}:{target.suffix.lower()}".encode("utf-8")).digest()
     primary = (40 + digest[0] // 2, 60 + digest[1] // 3, 90 + digest[2] // 3)
     accent = (180 + digest[3] // 4, 120 + digest[4] // 5, 40 + digest[5] // 4)
@@ -230,7 +246,7 @@ def _write_video_placeholder_thumbnail(target: Path, output_path: Path, failures
             row.extend(color)
         raw_rows.append(bytes(row))
 
-    label = f"SHIP video thumbnail fallback: {target.name}; suffix={target.suffix.lower()}"
+    label = f"{title}: {target.name}; suffix={target.suffix.lower()}"
     png = b"".join(
         [
             PNG_SIGNATURE,

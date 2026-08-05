@@ -46,7 +46,7 @@ def test_find_generated_thumbnail_reports_non_png_outputs(tmp_path: Path) -> Non
     assert str(output_dir) in message
 
 
-def test_get_thumbnail_bytes_reports_quick_look_stderr_for_non_video(
+def test_get_thumbnail_bytes_uses_design_placeholder_after_quick_look_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -67,20 +67,14 @@ def test_get_thumbnail_bytes_reports_quick_look_stderr_for_non_video(
     monkeypatch.setattr(thumbnails, "THUMBNAIL_CACHE_DIR", cache_dir)
     monkeypatch.setattr(thumbnails.subprocess, "run", fail_quick_look)
 
-    with pytest.raises(RuntimeError) as exc_info:
-        thumbnails.get_thumbnail_bytes(str(source_dir), "art.psd")
+    body = thumbnails.get_thumbnail_bytes(str(source_dir), "art.psd")
 
-    message = str(exc_info.value)
-    assert "qlmanage" in message
-    assert "exit code 64" in message
-    assert "ql stderr" in message
-    assert "ql stdout" in message
-    assert "output_dir=" in message
-    assert "art.psd" in message
-    assert "suffix=.psd" in message
+    assert body.startswith(PNG_SIGNATURE)
+    assert b"SHIP design thumbnail fallback" in body
+    assert b"art.psd" in body
 
 
-def test_get_thumbnail_bytes_reports_quick_look_timeout(
+def test_get_thumbnail_bytes_uses_design_placeholder_after_quick_look_timeout(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -101,13 +95,10 @@ def test_get_thumbnail_bytes_reports_quick_look_timeout(
     monkeypatch.setattr(thumbnails, "THUMBNAIL_CACHE_DIR", cache_dir)
     monkeypatch.setattr(thumbnails.subprocess, "run", time_out)
 
-    with pytest.raises(RuntimeError) as exc_info:
-        thumbnails.get_thumbnail_bytes(str(source_dir), "art.psd")
+    body = thumbnails.get_thumbnail_bytes(str(source_dir), "art.psd")
 
-    message = str(exc_info.value)
-    assert "timed out after 15s" in message
-    assert "late stderr" in message
-    assert "output_dir=" in message
+    assert body.startswith(PNG_SIGNATURE)
+    assert thumbnails.get_thumbnail_bytes(str(source_dir), "art.psd") == body
 
 
 def test_get_thumbnail_bytes_uses_video_placeholder_after_quick_look_no_png(
@@ -192,3 +183,18 @@ def test_video_placeholder_png_is_deterministic_and_labeled(tmp_path: Path) -> N
     assert first.read_bytes().startswith(PNG_SIGNATURE)
     assert b"clip.m4v" in first.read_bytes()
     assert b"suffix=.m4v" in first.read_bytes()
+
+
+def test_design_placeholder_png_is_deterministic_and_labeled(tmp_path: Path) -> None:
+    target = tmp_path / "layout.psb"
+    target.write_bytes(b"design")
+    first = tmp_path / "first.png"
+    second = tmp_path / "second.png"
+
+    thumbnails._write_design_placeholder_thumbnail(target, first, ["quick-look failed"])
+    thumbnails._write_design_placeholder_thumbnail(target, second, ["different diagnostics"])
+
+    assert first.read_bytes() == second.read_bytes()
+    assert first.read_bytes().startswith(PNG_SIGNATURE)
+    assert b"layout.psb" in first.read_bytes()
+    assert b"suffix=.psb" in first.read_bytes()

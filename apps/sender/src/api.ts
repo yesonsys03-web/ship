@@ -118,11 +118,13 @@ export async function fetchSenderHealth(): Promise<SenderHealth> {
   return getJson<SenderHealth>('/health');
 }
 
-export async function sendManifest(manifest: ShipmentManifest): Promise<{ ok: boolean }> {
+export type SendAuditAction = 'send' | 'revision';
+
+export async function sendManifest(manifest: ShipmentManifest, action: SendAuditAction = 'send'): Promise<{ ok: boolean }> {
   if (isTauriApp) {
-    return invokeJson<{ ok: boolean }>('sender_send', { manifest });
+    return invokeJson<{ ok: boolean }>('sender_send', { manifest, action });
   }
-  return postJson<{ ok: boolean }>('/send', manifest);
+  return postJson<{ ok: boolean }>('/send', { manifest, action });
 }
 
 export async function fetchBobsCatalogJobs(): Promise<BobsCatalogJobs> {

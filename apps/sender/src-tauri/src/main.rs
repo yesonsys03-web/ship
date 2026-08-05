@@ -74,9 +74,21 @@ fn sender_scan(app: tauri::AppHandle, path: String) -> Result<Value, String> {
 }
 
 #[tauri::command(async)]
-fn sender_send(app: tauri::AppHandle, manifest: Value) -> Result<Value, String> {
+fn sender_send(
+    app: tauri::AppHandle,
+    manifest: Value,
+    action: Option<String>,
+) -> Result<Value, String> {
     let port = ensure_backend(&app)?;
-    proxy_json(port, "POST", "/send", Some(manifest), MUTATION_HTTP_TIMEOUT)
+    proxy_json(
+        port,
+        "POST",
+        "/send",
+        Some(
+            json!({ "manifest": manifest, "action": action.unwrap_or_else(|| "send".to_string()) }),
+        ),
+        MUTATION_HTTP_TIMEOUT,
+    )
 }
 
 #[tauri::command(async)]

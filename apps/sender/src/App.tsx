@@ -1918,8 +1918,9 @@ export default function App() {
       note,
     }));
     try {
+      const auditAction = sendMode === 'revision' ? 'revision' : 'send';
       for (const manifestToSend of manifestsToSend) {
-        await sendManifest(manifestToSend);
+        await sendManifest(manifestToSend, auditAction);
       }
       setNote('');
       setSentHistory((currentHistory) => mergeSentHistory(manifestsToSend, currentHistory));

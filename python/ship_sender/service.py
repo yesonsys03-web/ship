@@ -27,8 +27,9 @@ def parse_bobs_pdf(
     return parse_bobs_retake_pdf(path, excel_paths=excel_paths, due_date_path=due_date_path)
 
 
-def send(manifest_payload: Dict[str, Any]) -> Dict[str, Any]:
+def send(manifest_payload: Dict[str, Any], action: str = "send") -> Dict[str, Any]:
     manifest = ShipmentManifest.from_dict(manifest_payload)
+    audit_action = normalize_send_audit_action(action)
     db_file = resolve_ship_db_file()
     try:
         result = ShipmentDatabase(db_file).save(manifest.to_dict())
@@ -36,8 +37,14 @@ def send(manifest_payload: Dict[str, Any]) -> Dict[str, Any]:
         message = format_send_db_error(db_file, exc)
         print(f"[SEND-DEBUG] /send save error {message}", flush=True)
         raise RuntimeError(message) from exc
-    write_manifest_audit_event("send", manifest.to_dict(), db_file=db_file)
+    write_manifest_audit_event(audit_action, manifest.to_dict(), db_file=db_file)
     return result
+
+
+def normalize_send_audit_action(action: str) -> str:
+    if action in {"send", "revision"}:
+        return action
+    raise ValueError("send action must be send or revision")
 
 
 def format_send_db_error(db_file: Path, exc: Exception) -> str:

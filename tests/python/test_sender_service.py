@@ -121,6 +121,26 @@ def test_send_writes_audit_log_to_shared_db_dir_by_default(monkeypatch, tmp_path
     assert entries[0]["manifest_id"] == "ship-shared-audit"
 
 
+def test_send_can_write_revision_audit_action(monkeypatch, tmp_path: Path) -> None:
+    manifest = ShipmentManifest(
+        id="ship-revision-audit",
+        source_path="/tmp/Bobs_Burgers/FASA13",
+        folder_name="밥스버거 FASA13 수정 씬",
+        created_at=datetime(2026, 8, 5, tzinfo=timezone.utc).isoformat(),
+        files=[FileEntry(path="02A_S01.bobs-scene", size=0, is_dir=False)],
+    )
+    log_dir = tmp_path / "audit-logs"
+
+    monkeypatch.setenv("SHIP_DB_DIR", str(tmp_path / "db"))
+    monkeypatch.setenv("SHIP_AUDIT_LOG_DIR", str(log_dir))
+
+    service.send(manifest.to_dict(), action="revision")
+
+    entries = read_audit_entries(log_dir)
+    assert entries[0]["action"] == "revision"
+    assert entries[0]["manifest_id"] == "ship-revision-audit"
+
+
 def test_windows_default_audit_log_dir_uses_local_app_data(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("SHIP_AUDIT_LOG_DIR", raising=False)
     local_app_data = tmp_path / "LocalAppData"

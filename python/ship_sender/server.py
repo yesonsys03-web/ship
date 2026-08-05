@@ -86,7 +86,10 @@ class SenderHandler(BaseHTTPRequestHandler):
                 )
                 return
             if self.path == "/send":
-                self._send_json(send(payload))
+                if isinstance(payload.get("manifest"), dict):
+                    self._send_json(send(payload["manifest"], action=str(payload.get("action", "send"))))
+                else:
+                    self._send_json(send(payload))
                 return
             if self.path == "/audit/generate":
                 manifest_payload = payload.get("manifest")

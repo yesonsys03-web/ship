@@ -89,6 +89,26 @@ def test_manager_frontend_bobs_title_derivation_precedes_king_of_hill_detection(
     assert "개 씬" in bobs_title_body
 
 
+def test_manager_frontend_work_color_classes_apply_to_titles_and_files_foreground_only() -> None:
+    title_source = read_source("shipmentTitles.ts")
+    navigator_source = read_source("components/LeftNavigator.tsx")
+    content_source = read_source("components/ContentPanel.tsx")
+    styles_source = read_source("styles.css")
+    color_body = title_source.split("export function getWorkColorClassName", 1)[1].split("function getBobsManifestDisplayTitle", 1)[0]
+
+    for class_name in ["work-color-hazbin", "work-color-florida", "work-color-bobs", "work-color-koth", "work-color-default"]:
+        assert class_name in color_body
+        rule = get_css_rule(styles_source, f".{class_name}")
+        assert rule.strip().startswith("color: var(--work-color-")
+        assert "background" not in rule
+        assert "border" not in rule
+        assert "box-shadow" not in rule
+
+    assert "getWorkColorClassName(navigationTitle)" in navigator_source
+    assert "getWorkColorClassName(getManifestDisplayTitle(manifest))" in content_source
+    assert "className={`file-path ${getWorkColorClassName(file.path)}`}" in content_source
+
+
 def test_manager_frontend_primary_nav_title_wraps_before_truncating_subtitle() -> None:
     styles_source = read_source("styles.css")
     primary_title_rule = get_css_rule(styles_source, ".nav-item em")
@@ -262,8 +282,10 @@ def test_manager_frontend_refresh_reloads_selected_manifest_with_scene_validatio
     refresh_body = app_source.split("async function refresh()", 1)[1].split("async function loadSelectedManifestSceneValidation", 1)[0]
 
     assert "mergeFastRefreshManifest" not in app_source
-    assert "refreshedSelected = await getShipment(currentSelected.id)" in refresh_body
-    assert "refreshedSelected = await getShipment(currentSelected.id, { includeSceneValidation: false })" not in refresh_body
+    assert "const currentSelectedId = selectedSummaryIdRef.current" in refresh_body
+    assert "refreshedSelected = await getShipment(currentSelectedId)" in refresh_body
+    assert "if (currentSelectedId !== '' && selectedSummaryIdRef.current !== currentSelectedId)" in refresh_body
+    assert "refreshedSelected = await getShipment(currentSelectedId, { includeSceneValidation: false })" not in refresh_body
     assert "void loadSelectedManifestSceneValidation(refreshedSelected.id)" not in refresh_body
 
 
@@ -366,7 +388,8 @@ def test_manager_tauri_backend_stops_only_when_app_exits() -> None:
     run_body = main_source.split(".run(|app_handle, event|", 1)[1]
 
     assert ".sidecar(\"ship-manager-backend\")" in main_source
-    assert "tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => stop_backend(app_handle)" in run_body
+    assert "tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit =>" in run_body
+    assert "stop_backend(app_handle)" in run_body
     assert "CloseRequested" not in main_source
 
 
@@ -454,12 +477,23 @@ def test_manager_frontend_uses_fast_manifest_cache_without_scene_validation() ->
     assert "includeSceneValidation?: boolean" in api_source
     assert "scene_validation" in api_source
     assert "includeSceneValidation: false" in search_cache_body
-    assert "refreshedSelected = await getShipment(currentSelected.id)" in refresh_body
+    assert "refreshedSelected = await getShipment(currentSelectedId)" in refresh_body
     assert "refreshedSelected = await getShipment(currentSelected.id, { includeSceneValidation: false })" not in refresh_body
     assert "mergeFastRefreshManifest" not in app_source
     assert "await getShipment(summary.id, { includeSceneValidation: false })" in select_body
     assert "void loadSelectedManifestSceneValidation(manifest.id)" in select_body
     assert "async function loadSelectedManifestSceneValidation" in app_source
+
+
+def test_manager_frontend_refresh_keeps_selected_summary_id_stable() -> None:
+    app_source = read_source("App.tsx")
+    refresh_body = app_source.split("async function refresh()", 1)[1].split("async function loadSelectedManifestSceneValidation", 1)[0]
+
+    assert "const currentSelectedId = selectedSummaryIdRef.current" in refresh_body
+    assert "if (currentSelectedId !== '')" in refresh_body
+    assert "shipmentExists(nextTree, currentSelectedId)" in refresh_body
+    assert "refreshedSelected = await getShipment(currentSelectedId)" in refresh_body
+    assert "if (currentSelectedId !== '' && selectedSummaryIdRef.current !== currentSelectedId)" in refresh_body
 
 
 def test_manager_frontend_prefetches_only_date_folder_navigation_titles_without_scene_validation() -> None:

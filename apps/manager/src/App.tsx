@@ -470,10 +470,10 @@ export default function App() {
       let refreshedSelected: ShipmentManifest | null | undefined;
       let selectedRefreshError = '';
 
-      if (currentSelected && currentSelected.id === currentSelectedId) {
-        if (shipmentExists(nextTree, currentSelected.id)) {
+      if (currentSelectedId !== '') {
+        if (shipmentExists(nextTree, currentSelectedId)) {
           try {
-            refreshedSelected = await getShipment(currentSelected.id);
+            refreshedSelected = await getShipment(currentSelectedId);
           } catch (error) {
             selectedRefreshError = error instanceof Error ? error.message : '선택한 선적 내용을 새로고침하지 못했습니다.';
           }
@@ -487,6 +487,9 @@ export default function App() {
       setNewShipmentIds(new Set([...todayShipmentIds, ...detectedNewShipmentIds]));
 
       if (refreshedSelected !== undefined) {
+        if (currentSelectedId !== '' && selectedSummaryIdRef.current !== currentSelectedId) {
+          return;
+        }
         selectedRef.current = refreshedSelected;
         setSelected(refreshedSelected);
         if (refreshedSelected) {

@@ -16,7 +16,7 @@ from .config import SENDER_ALLOWED_ORIGINS, SENDER_HOST, SENDER_MAX_REQUEST_BYTE
 from .service import bobs_job, bobs_jobs, db_status, log_generate, log_startup_db_diagnostic, parse_bobs_pdf, scan, send, sent_history
 from ship_common.db_path import resolve_ship_db_file
 from ship_common.shipment_db import ShipmentDatabase
-from ship_common.thumbnails import get_thumbnail_bytes
+from ship_common.thumbnails import get_design_placeholder_thumbnail_bytes, get_thumbnail_bytes
 
 
 class SenderHandler(BaseHTTPRequestHandler):
@@ -54,7 +54,20 @@ class SenderHandler(BaseHTTPRequestHandler):
                 shipment_id = _optional_query_value(query, "shipment_id")
                 thumbnail = get_persisted_thumbnail_bytes(shipment_id, file_path) if shipment_id else None
                 if thumbnail is None:
-                    thumbnail = get_thumbnail_bytes(_required_query_value(query, "source_path"), file_path)
+                    source_path = _optional_query_value(query, "source_path")
+                    if source_path:
+                        try:
+                            thumbnail = get_thumbnail_bytes(source_path, file_path)
+                        except Exception:
+                            if file_path.lower().endswith((".psd", ".psb")):
+                                thumbnail = get_design_placeholder_thumbnail_bytes(file_path)
+                            else:
+                                raise
+                    elif file_path.lower().endswith((".psd", ".psb")):
+                        thumbnail = get_design_placeholder_thumbnail_bytes(file_path)
+                    else:
+                        source_path = _required_query_value(query, "source_path")
+                        thumbnail = get_thumbnail_bytes(source_path, file_path)
                     if shipment_id:
                         save_persisted_thumbnail_bytes(shipment_id, file_path, thumbnail)
                 self._send_bytes(thumbnail, "image/png")

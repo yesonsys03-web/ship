@@ -69,6 +69,14 @@ def get_thumbnail_bytes(source_path: str, file_path: str) -> bytes:
     return cached_thumbnail.read_bytes()
 
 
+def get_design_placeholder_thumbnail_bytes(file_path: str) -> bytes:
+    target = Path(file_path)
+    with tempfile.TemporaryDirectory(prefix="ship-thumb-placeholder-") as output_dir:
+        output_path = Path(output_dir) / "design-placeholder.png"
+        _write_design_placeholder_thumbnail(target, output_path, [])
+        return output_path.read_bytes()
+
+
 def _cache_path(target: Path) -> Path:
     stat = target.stat()
     cache_key = hashlib.sha256(f"{target}:{stat.st_mtime_ns}:{stat.st_size}".encode("utf-8")).hexdigest()

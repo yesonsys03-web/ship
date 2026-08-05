@@ -198,3 +198,12 @@ def test_design_placeholder_png_is_deterministic_and_labeled(tmp_path: Path) -> 
     assert first.read_bytes().startswith(PNG_SIGNATURE)
     assert b"layout.psb" in first.read_bytes()
     assert b"suffix=.psb" in first.read_bytes()
+
+
+def test_get_design_placeholder_thumbnail_bytes_is_deterministic_and_png() -> None:
+    first = thumbnails.get_design_placeholder_thumbnail_bytes("poster.psd")
+    second = thumbnails.get_design_placeholder_thumbnail_bytes("poster.psd")
+
+    assert first == second
+    assert first.startswith(PNG_SIGNATURE)
+    assert b"poster.psd" in first

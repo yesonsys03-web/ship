@@ -9,6 +9,10 @@ def read_source(relative_path: str) -> str:
     return (LOG_VIEWER_SRC / relative_path).read_text(encoding="utf-8")
 
 
+def get_css_rule(source: str, selector: str) -> str:
+    return source.split(f"{selector} {{", 1)[1].split("}", 1)[0]
+
+
 def test_log_viewer_maps_florida_files_inside_date_folder_to_korean_title() -> None:
     app_source = read_source("App.tsx")
     mapped_title_body = app_source.split("function getMappedWorkTitle", 1)[1].split("function getEntryMappedTitle", 1)[0]
@@ -30,6 +34,24 @@ def test_log_viewer_search_includes_mapped_florida_title() -> None:
     search_values_body = app_source.split("function getEntrySearchValues", 1)[1].split("function getEntryVisibleTextValues", 1)[0]
 
     assert "getEntryMappedTitle(entry)" in search_values_body
+
+
+def test_log_viewer_work_color_classes_apply_to_titles_and_files_foreground_only() -> None:
+    app_source = read_source("App.tsx")
+    styles_source = read_source("styles.css")
+    color_body = app_source.split("function getWorkColorClassName", 1)[1].split("function getEntryMappedTitle", 1)[0]
+
+    for class_name in ["work-color-hazbin", "work-color-florida", "work-color-bobs", "work-color-koth", "work-color-default"]:
+        assert class_name in color_body
+        rule = get_css_rule(styles_source, f".{class_name}")
+        assert rule.strip().startswith("color: var(--work-color-")
+        assert "background" not in rule
+        assert "border" not in rule
+        assert "box-shadow" not in rule
+
+    assert "function getEntryWorkColorClassName" in app_source
+    assert "className={getEntryWorkColorClassName(entry)}" in app_source
+    assert "className={`file-name-chip ${getWorkColorClassName(value)}`}" in app_source
 
 
 def test_log_viewer_hides_redundant_send_only_checkbox() -> None:

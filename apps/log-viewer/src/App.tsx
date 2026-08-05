@@ -72,6 +72,21 @@ function getFloridaEpisode(value: string) {
   return value.match(/FL_(\d+)(?=\D|$)/i)?.[1] ?? value.match(/FL0?(\d{3})(?=\D|$)/i)?.[1];
 }
 
+function getKothEpisode(value: string) {
+  const match = value.match(/(?:^|[^A-Za-z0-9])((?:15|16)\d{2}(?:_PROMO)?)(?=$|[^A-Za-z0-9])/i);
+  return match?.[1].toUpperCase();
+}
+
+function isFloridaValue(value: string) {
+  return getPathSegments(value).some((segment) => /^FL/i.test(segment)) || /^FL/i.test(value);
+}
+
+function isBobsValue(value: string) {
+  return getPathSegments(value).some((segment) => /^(?:bobs|bobs_burgers|bob'?s[_ -]?burgers|fasa\d+)/i.test(segment))
+    || /(?:^|[^A-Za-z0-9])(?:bobs|bobs_burgers|bob'?s[_ -]?burgers|fasa\d+)/i.test(value)
+    || value.includes('밥스버거');
+}
+
 function getMappedWorkTitle(value: string) {
   const segments = getPathSegments(value);
   const hazbinEpisode = segments.map(getHazbinEpisode).find((episode) => episode !== undefined) ?? getHazbinEpisode(value);
@@ -83,7 +98,28 @@ function getMappedWorkTitle(value: string) {
   if (floridaEpisode) {
     return `플로리다 ${floridaEpisode}화`;
   }
+  if (isFloridaValue(value)) {
+    return '플로리다';
+  }
   return '';
+}
+
+function getWorkColorClassName(value: string) {
+  const mappedTitle = getMappedWorkTitle(value);
+  const workTitle = mappedTitle || getPathSegments(value)[0] || value;
+  if (value.includes('헤즈빈호텔') || workTitle.startsWith('헤즈빈호텔')) {
+    return 'work-color-hazbin';
+  }
+  if (value.includes('플로리다') || workTitle.startsWith('플로리다')) {
+    return 'work-color-florida';
+  }
+  if (value.includes('밥스버거') || workTitle.startsWith('밥스버거') || isBobsValue(value)) {
+    return 'work-color-bobs';
+  }
+  if (value.includes('킹오브더힐') || workTitle.startsWith('킹오브더힐') || getKothEpisode(value) !== undefined) {
+    return 'work-color-koth';
+  }
+  return 'work-color-default';
 }
 
 function getEntryMappedTitle(entry: AuditLogEntry) {
@@ -106,6 +142,11 @@ function getEntryTitle(entry: AuditLogEntry) {
     return entry.source_path;
   }
   return '제목 없음';
+}
+
+function getEntryWorkColorClassName(entry: AuditLogEntry) {
+  const sources = [getEntryTitle(entry), entry.folder_name, ...(entry.files ?? []), entry.source_path].filter((value): value is string => isPresent(value));
+  return sources.map(getWorkColorClassName).find((className) => className !== 'work-color-default') ?? 'work-color-default';
 }
 
 function getHostLabel(entry: AuditLogEntry) {
@@ -346,7 +387,7 @@ function DetailListRow({
       <dd>
         <span className="file-name-list">
           {values.map((value, index) => (
-            <span className="file-name-chip" key={`${value}-${index}`}>
+            <span className={`file-name-chip ${getWorkColorClassName(value)}`} key={`${value}-${index}`}>
               {renderValue(value)}
             </span>
           ))}
@@ -401,7 +442,7 @@ function EntryCard({
       <div className="log-card-heading">
         <div>
           <p className="action-chip">{renderHighlightedValue(actionLabel)}</p>
-          <h3>{renderHighlightedValue(title)}</h3>
+          <h3 className={getEntryWorkColorClassName(entry)}>{renderHighlightedValue(title)}</h3>
         </div>
         <time>{renderHighlightedValue(timestamp)}</time>
       </div>

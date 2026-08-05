@@ -244,7 +244,20 @@ require_universal_macho() {
 
   architectures="$(binary_architectures "$binary_path")"
   if ! archs_include "$architectures" "x86_64" || ! archs_include "$architectures" "arm64"; then
-    fail "Universal build artifact is not universal: $label at $binary_path reports '$architectures'. Expected both x86_64 and arm64. Rebuild with SHIP_MACOS_BUILD_MODE=universal, a universal2 Python interpreter, PyInstaller --target-arch universal2, and Tauri --target universal-apple-darwin."
+    fail "Universal build artifact is not universal: $label at $binary_path reports '$architectures'. Expected both x86_64 and arm64. Rebuild with SHIP_MACOS_BUILD_MODE=universal, a universal2 Python interpreter, and Tauri --target universal-apple-darwin."
+  fi
+  printf '%s architectures: %s\n' "$label" "$architectures"
+}
+
+require_macho_arch() {
+  local label="$1"
+  local binary_path="$2"
+  local required_arch="$3"
+  local architectures
+
+  architectures="$(binary_architectures "$binary_path")"
+  if ! archs_include "$architectures" "$required_arch"; then
+    fail "Build artifact has the wrong architecture: $label at $binary_path reports '$architectures'. Expected $required_arch."
   fi
   printf '%s architectures: %s\n' "$label" "$architectures"
 }
@@ -302,6 +315,99 @@ raise SystemExit(0 if Path(executable).resolve() == selected else 1)
 PY
 }
 
+run_python_for_arch() {
+  local build_arch="$1"
+  local python_bin="$2"
+  shift 2
+
+  if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
+    run_without_python_dyld arch "-$build_arch" "$python_bin" "$@"
+  else
+    run_without_python_dyld "$python_bin" "$@"
+  fi
+}
+
+pyinstaller_venv_dir() {
+  local build_arch="$1"
+
+  if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
+    printf '%s-%s\n' "$VENV_DIR" "$build_arch"
+  else
+    printf '%s\n' "$VENV_DIR"
+  fi
+}
+
+pyinstaller_dist_dir() {
+  local build_arch="$1"
+
+  if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
+    printf '%s/dist-%s\n' "$BUILD_DIR" "$build_arch"
+  else
+    printf '%s/dist\n' "$BUILD_DIR"
+  fi
+}
+
+pyinstaller_bundle_suffix() {
+  local build_arch="$1"
+
+  if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
+    printf -- '-%s\n' "$build_arch"
+  fi
+}
+
+ensure_pyinstaller_venv() {
+  local build_arch="$1"
+  local arch_venv
+
+  arch_venv="$(pyinstaller_venv_dir "$build_arch")"
+  if [ ! -d "$arch_venv" ]; then
+    run_python_for_arch "$build_arch" "$PYTHON_BIN" -m venv "$arch_venv"
+  fi
+  run_python_for_arch "$build_arch" "$arch_venv/bin/python" -m pip install --upgrade pip
+  run_python_for_arch "$build_arch" "$arch_venv/bin/python" -m pip install pyinstaller "psd-tools>=1.10,<2" "numpy>=1.26,<2"
+}
+
+build_pyinstaller_sidecars() {
+  local build_arch="$1"
+  local arch_venv
+  local arch_dist
+  local arch_args
+
+  arch_venv="$(pyinstaller_venv_dir "$build_arch")"
+  arch_dist="$(pyinstaller_dist_dir "$build_arch")"
+  arch_args=(--target-arch "$build_arch")
+
+  ensure_pyinstaller_venv "$build_arch"
+  rm -rf \
+    "$arch_dist/ship-sender-backend" \
+    "$arch_dist/ship-manager-backend"
+
+  run_python_for_arch "$build_arch" "$arch_venv/bin/python" -m PyInstaller \
+    --clean \
+    "${arch_args[@]}" \
+    --name ship-sender-backend \
+    --collect-submodules psd_tools \
+    --paths "$ROOT_DIR/python" \
+    --distpath "$arch_dist" \
+    --workpath "$BUILD_DIR/work-sender-$build_arch" \
+    --specpath "$BUILD_DIR/spec-$build_arch" \
+    "$ROOT_DIR/python/ship_sender_app.py"
+
+  run_python_for_arch "$build_arch" "$arch_venv/bin/python" -m PyInstaller \
+    --clean \
+    "${arch_args[@]}" \
+    --name ship-manager-backend \
+    --collect-submodules psd_tools \
+    --paths "$ROOT_DIR/python" \
+    --distpath "$arch_dist" \
+    --workpath "$BUILD_DIR/work-manager-$build_arch" \
+    --specpath "$BUILD_DIR/spec-$build_arch" \
+    "$ROOT_DIR/python/ship_manager_app.py"
+
+  require_macho_arch "PyInstaller sender sidecar executable $build_arch" "$arch_dist/ship-sender-backend/ship-sender-backend" "$build_arch"
+  require_macho_arch "PyInstaller manager sidecar executable $build_arch" "$arch_dist/ship-manager-backend/ship-manager-backend" "$build_arch"
+}
+
 validate_python_runtime "selected Python" "$PYTHON_BIN"
 
 if [ -d "$VENV_DIR" ] && ! venv_matches_python; then
@@ -318,9 +424,10 @@ validate_python_runtime "build venv" "$VENV_DIR/bin/python"
 if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
   TARGET_TRIPLE="universal-apple-darwin"
   TAURI_BUILD_ARGS=(build --bundles app --target universal-apple-darwin)
-  PYINSTALLER_ARCH_ARGS=(--target-arch universal2)
+  PYINSTALLER_BUILD_ARCHS=(x86_64 arm64)
   WRAPPER_TARGET_TRIPLES=(x86_64-apple-darwin aarch64-apple-darwin universal-apple-darwin)
   WRAPPER_CC_ARCH_ARGS=(-arch x86_64 -arch arm64)
+  WRAPPER_ARCH_SUFFIX_ARGS=(-DARCH_SUFFIX_BY_SLICE=1)
 else
   if command -v rustc >/dev/null 2>&1; then
     TARGET_TRIPLE="$(run_without_python_dyld rustc --print host-tuple)"
@@ -333,12 +440,13 @@ else
   fi
   TAURI_BUILD_ARGS=(build)
   case "$(uname -m)" in
-    arm64) PYINSTALLER_ARCH_ARGS=(--target-arch arm64) ;;
-    x86_64) PYINSTALLER_ARCH_ARGS=(--target-arch x86_64) ;;
+    arm64) PYINSTALLER_BUILD_ARCHS=(arm64) ;;
+    x86_64) PYINSTALLER_BUILD_ARCHS=(x86_64) ;;
     *) printf 'Unsupported macOS architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
   esac
   WRAPPER_TARGET_TRIPLES=("$TARGET_TRIPLE")
   WRAPPER_CC_ARCH_ARGS=()
+  WRAPPER_ARCH_SUFFIX_ARGS=()
 fi
 
 mkdir -p "$BUILD_DIR" "$RELEASE_DIR" \
@@ -366,6 +474,18 @@ create_sidecar_wrapper() {
 #error EXECUTABLE_NAME is required
 #endif
 
+#ifdef ARCH_SUFFIX_BY_SLICE
+#if defined(__x86_64__)
+#define BUNDLE_ARCH_SUFFIX "-x86_64"
+#elif defined(__arm64__)
+#define BUNDLE_ARCH_SUFFIX "-arm64"
+#else
+#error Unsupported macOS architecture slice
+#endif
+#else
+#define BUNDLE_ARCH_SUFFIX ""
+#endif
+
 int main(int argc, char **argv) {
   char self_path[PATH_MAX];
   const char *argv0 = argc > 0 ? argv[0] : NULL;
@@ -386,9 +506,10 @@ int main(int argc, char **argv) {
   int written = snprintf(
       target_path,
       sizeof(target_path),
-      "%s/%s/%s",
+      "%s/%s%s/%s",
       self_path,
       BUNDLE_DIR,
+      BUNDLE_ARCH_SUFFIX,
       EXECUTABLE_NAME);
   if (written < 0 || (size_t)written >= sizeof(target_path)) {
     fprintf(stderr, "sidecar target path is too long\n");
@@ -414,6 +535,7 @@ int main(int argc, char **argv) {
 EOF
   run_without_python_dyld cc -Os -Wall -Wextra \
     ${WRAPPER_CC_ARCH_ARGS[@]+"${WRAPPER_CC_ARCH_ARGS[@]}"} \
+    ${WRAPPER_ARCH_SUFFIX_ARGS[@]+"${WRAPPER_ARCH_SUFFIX_ARGS[@]}"} \
     -mmacosx-version-min="$MACOS_DEPLOYMENT_TARGET" \
     -DBUNDLE_DIR="\"$bundle_dir\"" \
     -DEXECUTABLE_NAME="\"$executable_name\"" \
@@ -540,10 +662,16 @@ verify_release_app_architectures() {
   local main_executable="$3"
   local sidecar_wrapper="$4"
   local sidecar_bundle="$5"
+  local build_arch
 
   report_release_executable_architecture "$app_label main executable" "$app_path/Contents/MacOS/$main_executable"
   report_release_executable_architecture "$app_label sidecar wrapper" "$app_path/Contents/MacOS/$sidecar_wrapper"
-  report_release_executable_architecture "$app_label bundled sidecar executable" "$app_path/Contents/Resources/$sidecar_bundle/$sidecar_wrapper"
+  for build_arch in "${PYINSTALLER_BUILD_ARCHS[@]}"; do
+    require_macho_arch \
+      "$app_label bundled sidecar executable $build_arch" \
+      "$app_path/Contents/Resources/$sidecar_bundle$(pyinstaller_bundle_suffix "$build_arch")/$sidecar_wrapper" \
+      "$build_arch"
+  done
 }
 
 tool_location() {
@@ -608,39 +736,9 @@ if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
   preflight_universal_rust_targets
 fi
 
-"$VENV_DIR/bin/python" -m pip install --upgrade pip
-"$VENV_DIR/bin/python" -m pip install pyinstaller "psd-tools>=1.10,<2"
-
-rm -rf \
-  "$BUILD_DIR/dist/ship-sender-backend" \
-  "$BUILD_DIR/dist/ship-manager-backend"
-
-"$VENV_DIR/bin/python" -m PyInstaller \
-  --clean \
-  ${PYINSTALLER_ARCH_ARGS[@]+"${PYINSTALLER_ARCH_ARGS[@]}"} \
-  --name ship-sender-backend \
-  --collect-submodules psd_tools \
-  --paths "$ROOT_DIR/python" \
-  --distpath "$BUILD_DIR/dist" \
-  --workpath "$BUILD_DIR/work-sender" \
-  --specpath "$BUILD_DIR/spec" \
-  "$ROOT_DIR/python/ship_sender_app.py"
-
-"$VENV_DIR/bin/python" -m PyInstaller \
-  --clean \
-  ${PYINSTALLER_ARCH_ARGS[@]+"${PYINSTALLER_ARCH_ARGS[@]}"} \
-  --name ship-manager-backend \
-  --collect-submodules psd_tools \
-  --paths "$ROOT_DIR/python" \
-  --distpath "$BUILD_DIR/dist" \
-  --workpath "$BUILD_DIR/work-manager" \
-  --specpath "$BUILD_DIR/spec" \
-  "$ROOT_DIR/python/ship_manager_app.py"
-
-if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
-  require_universal_macho "PyInstaller sender sidecar executable" "$BUILD_DIR/dist/ship-sender-backend/ship-sender-backend"
-  require_universal_macho "PyInstaller manager sidecar executable" "$BUILD_DIR/dist/ship-manager-backend/ship-manager-backend"
-fi
+for pyinstaller_build_arch in "${PYINSTALLER_BUILD_ARCHS[@]}"; do
+  build_pyinstaller_sidecars "$pyinstaller_build_arch"
+done
 
 for wrapper_target_triple in "${WRAPPER_TARGET_TRIPLES[@]}"; do
   create_sidecar_wrapper \
@@ -706,14 +804,16 @@ fi
 [ -d "$MANAGER_APP_BUILD_PATH" ] || fail "Manager .app bundle was not produced at $MANAGER_APP_BUILD_PATH. Check the preceding Tauri build output."
 [ -d "$LOG_VIEWER_APP_BUILD_PATH" ] || fail "Log viewer .app bundle was not produced at $LOG_VIEWER_APP_BUILD_PATH. Check the preceding Tauri build output."
 
-install_sidecar_bundle \
-  "$BUILD_DIR/dist/ship-sender-backend" \
-  "$SENDER_APP_BUILD_PATH/Contents/Resources/ship-sender-backend-bundle" \
-  "ship-sender-backend"
-install_sidecar_bundle \
-  "$BUILD_DIR/dist/ship-manager-backend" \
-  "$MANAGER_APP_BUILD_PATH/Contents/Resources/ship-manager-backend-bundle" \
-  "ship-manager-backend"
+for pyinstaller_build_arch in "${PYINSTALLER_BUILD_ARCHS[@]}"; do
+  install_sidecar_bundle \
+    "$(pyinstaller_dist_dir "$pyinstaller_build_arch")/ship-sender-backend" \
+    "$SENDER_APP_BUILD_PATH/Contents/Resources/ship-sender-backend-bundle$(pyinstaller_bundle_suffix "$pyinstaller_build_arch")" \
+    "ship-sender-backend"
+  install_sidecar_bundle \
+    "$(pyinstaller_dist_dir "$pyinstaller_build_arch")/ship-manager-backend" \
+    "$MANAGER_APP_BUILD_PATH/Contents/Resources/ship-manager-backend-bundle$(pyinstaller_bundle_suffix "$pyinstaller_build_arch")" \
+    "ship-manager-backend"
+done
 
 cp -R "$SENDER_APP_BUILD_PATH" "$RELEASE_DIR/"
 cp -R "$MANAGER_APP_BUILD_PATH" "$RELEASE_DIR/"
@@ -748,7 +848,7 @@ printf -- '- The copied .app does not need a separate Python install; Python run
 printf -- '- macOS deployment target: %s. The selected Python %s runtime was validated before packaging.\n' "$MACOS_DEPLOYMENT_TARGET" "$PYTHON_RUNTIME_VERSION"
 printf -- '- Build mode: %s. Tauri target: %s.\n' "$SHIP_MACOS_BUILD_MODE" "$TARGET_TRIPLE"
 if [ "$SHIP_MACOS_BUILD_MODE" = "universal" ]; then
-  printf -- '- Universal mode passed lipo verification for sender/manager main executables, sidecar wrappers, bundled PyInstaller executables, and the log viewer main executable.\n'
+  printf -- '- Universal mode passed lipo verification for sender/manager main executables, sidecar wrappers, per-architecture PyInstaller sidecar bundles, and the log viewer main executable.\n'
 else
   printf -- '- Native mode is intentionally thin. If the final app reports x86_64-only, keep it as an x86_64/Rosetta package or rebuild with SHIP_MACOS_BUILD_MODE=universal before shipping to macOS 12 Silicon Macs.\n'
 fi

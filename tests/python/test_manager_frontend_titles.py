@@ -109,6 +109,30 @@ def test_manager_frontend_work_color_classes_apply_to_titles_and_files_foregroun
     assert "className={`file-path ${getWorkColorClassName(file.path)}`}" in content_source
 
 
+def test_manager_frontend_work_background_classes_apply_to_nav_and_file_containers() -> None:
+    title_source = read_source("shipmentTitles.ts")
+    navigator_source = read_source("components/LeftNavigator.tsx")
+    content_source = read_source("components/ContentPanel.tsx")
+    styles_source = read_source("styles.css")
+    bg_body = title_source.split("export function getWorkBackgroundClassName", 1)[1].split("function getBobsManifestDisplayTitle", 1)[0]
+
+    assert "replace('work-color-', 'work-bg-')" in bg_body
+    assert "getWorkBackgroundClassName(navigationTitle)" in navigator_source
+    assert "className={`nav-item ${getWorkBackgroundClassName(navigationTitle)}${shipment.id === selectedId ? ' active' : ''}`}" in navigator_source
+    assert "getWorkBackgroundClassName(file.path)" in content_source
+    assert "className={`file-row ${isFolder ? 'folder-row' : 'file-entry-row'} ${getWorkBackgroundClassName(file.path)}`}" in content_source
+
+    for class_name in ["work-bg-hazbin", "work-bg-florida", "work-bg-bobs", "work-bg-koth", "work-bg-default"]:
+        rule = get_css_rule(styles_source, f".{class_name}")
+        assert rule.strip().startswith("background: var(--work-bg-")
+        assert "color: var(--ink)" in rule
+
+    assert ".nav-item.work-bg-hazbin" in styles_source
+    assert ".file-row.work-bg-bobs" in styles_source
+    assert ".nav-item.work-bg-hazbin:hover" in styles_source
+    assert ".nav-item.work-bg-bobs.active" in styles_source
+
+
 def test_manager_frontend_primary_nav_title_wraps_before_truncating_subtitle() -> None:
     styles_source = read_source("styles.css")
     primary_title_rule = get_css_rule(styles_source, ".nav-item em")
@@ -126,7 +150,7 @@ def test_manager_frontend_nav_rows_show_korean_file_count_metadata() -> None:
     navigator_source = read_source("components/LeftNavigator.tsx")
     styles_source = read_source("styles.css")
     file_count_rule = get_css_rule(styles_source, ".nav-file-count")
-    row_body = navigator_source.split('className={shipment.id === selectedId ? \'nav-item active\' : \'nav-item\'}', 1)[1].split("</button>", 1)[0]
+    row_body = navigator_source.split("className={`nav-item ${getWorkBackgroundClassName(navigationTitle)}${shipment.id === selectedId ? ' active' : ''}`}", 1)[1].split("</button>", 1)[0]
 
     assert 'className="nav-file-count"' in navigator_source
     assert "renderHighlightedText(`${shipment.file_count}개 파일`, searchQuery)" in navigator_source

@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import type { ShipmentManifest, ShipmentSummary, ShipmentTree } from '../api';
-import { getDisplayFolderName, getShipmentNavigationTitle, getWorkColorClassName } from '../shipmentTitles';
+import { getDisplayFolderName, getShipmentNavigationTitle, getWorkBackgroundClassName, getWorkColorClassName } from '../shipmentTitles';
 
 type HighlightPart = string | ReactElement;
 
@@ -173,7 +173,7 @@ export function LeftNavigator({
                         {renderHighlightedText(dayLabel, searchQuery)}
                       </button>
                       <button
-                        className={shipment.id === selectedId ? 'nav-item active' : 'nav-item'}
+                        className={`nav-item ${getWorkBackgroundClassName(navigationTitle)}${shipment.id === selectedId ? ' active' : ''}`}
                         type="button"
                         onClick={() => onSelect(shipment)}
                       >

@@ -170,6 +170,10 @@ export function getWorkColorClassName(value: string) {
   return 'work-color-default';
 }
 
+export function getWorkBackgroundClassName(value: string) {
+  return getWorkColorClassName(value).replace('work-color-', 'work-bg-');
+}
+
 function getBobsManifestDisplayTitle(manifest: ShipmentManifest) {
   const title = manifest.folder_name.trim();
   const sources = [manifest.folder_name, manifest.source_path, ...manifest.files.map((file) => file.path)];

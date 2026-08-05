@@ -278,7 +278,7 @@ fn read_audit_log_entries_from_dirs(
         }
         found_log = true;
         let result = read_audit_log_entries_in(log_dir, date)?;
-        entries.extend(result.entries);
+        entries.extend(result.entries.into_iter().filter(is_visible_audit_entry));
         malformed_count += result.malformed_count;
         for line in result.malformed_lines {
             if malformed_lines.len() < MAX_MALFORMED_SAMPLES {
@@ -387,6 +387,10 @@ fn parse_audit_log_entry(raw_line: &str, line_number: usize) -> Result<AuditLogE
         hostname: optional_string(object.get("hostname")),
         hostname_source: optional_string(object.get("hostname_source")),
     })
+}
+
+fn is_visible_audit_entry(entry: &AuditLogEntry) -> bool {
+    entry.action.as_deref() == Some("send")
 }
 
 fn optional_string_array(value: Option<&Value>) -> Option<Vec<String>> {
@@ -933,11 +937,67 @@ mod tests {
         )
         .expect("combined logs should read");
 
-        assert_eq!(result.entries.len(), 2);
+        assert_eq!(result.entries.len(), 1);
         assert_eq!(result.entries[0].manifest_id.as_deref(), Some("local-log"));
-        assert_eq!(result.entries[1].manifest_id.as_deref(), Some("shared-log"));
         fs::remove_dir_all(local_dir).expect("local temp dir should be removed");
         fs::remove_dir_all(shared_dir).expect("shared temp dir should be removed");
+    }
+
+    #[test]
+    fn reads_only_sent_audit_entries() {
+        let log_dir = make_temp_log_dir("send-only");
+        let generated_line = serde_json::json!({
+            "schema_version": 1,
+            "timestamp": "2026-08-05T08:00:00Z",
+            "date": "2026-08-05",
+            "action": "generate",
+            "manifest_id": "selected-but-not-sent",
+            "folder_name": "밥스버거 FASA05 7개 씬",
+            "source_path": "bobs://Bobs_Burgers/FASA05/batch/01_S01+01_S02",
+            "file_count": 2,
+            "files": ["01_S01", "01_S02"],
+            "note": "",
+            "job": "FASA05",
+            "tk": "",
+            "batch": "",
+            "ip": "192.168.0.44",
+            "hostname": "DESKTOP-6PGV457",
+            "hostname_source": "socket"
+        });
+        let sent_line = serde_json::json!({
+            "schema_version": 1,
+            "timestamp": "2026-08-05T08:01:00Z",
+            "date": "2026-08-05",
+            "action": "send",
+            "manifest_id": "actually-sent",
+            "folder_name": "밥스버거 FASA05 7개 씬",
+            "source_path": "bobs://Bobs_Burgers/FASA05/batch/01_S01+01_S02",
+            "file_count": 2,
+            "files": ["01_S01", "01_S02"],
+            "note": "",
+            "job": "FASA05",
+            "tk": "",
+            "batch": "",
+            "ip": "192.168.0.44",
+            "hostname": "DESKTOP-6PGV457",
+            "hostname_source": "socket"
+        });
+        fs::write(
+            log_dir.join("2026-08-05.jsonl"),
+            format!("{generated_line}\n{sent_line}\n"),
+        )
+        .expect("log file should write");
+
+        let result = read_audit_log_entries_from_dirs(&[log_dir.clone()], "2026-08-05")
+            .expect("log should read");
+
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].action.as_deref(), Some("send"));
+        assert_eq!(
+            result.entries[0].manifest_id.as_deref(),
+            Some("actually-sent")
+        );
+        fs::remove_dir_all(log_dir).expect("temp log dir should be removed");
     }
 
     #[test]

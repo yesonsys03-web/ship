@@ -15,7 +15,6 @@ const timestampFormatter = new Intl.DateTimeFormat('ko-KR', {
 
 type Summary = {
   totalEntries: number;
-  generateCount: number;
   sendCount: number;
   totalFiles: number;
   hostCount: number;
@@ -52,9 +51,6 @@ function formatTimestamp(timestamp: string | undefined) {
 }
 
 function getActionLabel(action: string | undefined) {
-  if (action === 'generate') {
-    return '목록 생성';
-  }
   if (action === 'send') {
     return '전송';
   }
@@ -283,11 +279,12 @@ function scrollMatchIntoPanel(matchElement: HTMLElement, contentPanel: HTMLEleme
   contentPanel.scrollTop += matchCenter - panelCenter;
 }
 
-function entryMatchesAction(entry: AuditLogEntry, showGenerateOnly: boolean, showSendOnly: boolean) {
-  if (!showGenerateOnly && !showSendOnly) {
-    return true;
-  }
-  return (showGenerateOnly && entry.action === 'generate') || (showSendOnly && entry.action === 'send');
+function entryIsTransferLog(entry: AuditLogEntry) {
+  return entry.action === 'send';
+}
+
+function entryMatchesAction(entry: AuditLogEntry, showSendOnly: boolean) {
+  return entryIsTransferLog(entry) && (!showSendOnly || entry.action === 'send');
 }
 
 function entryMatchesQuery(entry: AuditLogEntry, normalizedQuery: string) {
@@ -298,11 +295,10 @@ function entryMatchesQuery(entry: AuditLogEntry, normalizedQuery: string) {
 }
 
 function summarize(result: AuditLogReadResult | null): Summary {
-  const entries = result?.entries ?? [];
+  const entries = (result?.entries ?? []).filter(entryIsTransferLog);
   const hosts = new Set(entries.map((entry) => `${entry.hostname ?? ''}/${entry.ip ?? ''}`).filter((value) => value !== '/'));
   return {
     totalEntries: entries.length,
-    generateCount: entries.filter((entry) => entry.action === 'generate').length,
     sendCount: entries.filter((entry) => entry.action === 'send').length,
     totalFiles: entries.reduce((total, entry) => total + (entry.file_count ?? 0), 0),
     hostCount: hosts.size,
@@ -431,7 +427,6 @@ export default function App() {
   const [entriesError, setEntriesError] = useState('');
   const [isLoadingDates, setIsLoadingDates] = useState(true);
   const [isLoadingEntries, setIsLoadingEntries] = useState(false);
-  const [showGenerateOnly, setShowGenerateOnly] = useState(false);
   const [showSendOnly, setShowSendOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
@@ -507,9 +502,9 @@ export default function App() {
   const filteredEntries = useMemo(() => {
     const entries = result?.entries ?? [];
     return entries.filter(
-      (entry) => entryMatchesAction(entry, showGenerateOnly, showSendOnly) && entryMatchesQuery(entry, normalizedSearchQuery),
+      (entry) => entryMatchesAction(entry, showSendOnly) && entryMatchesQuery(entry, normalizedSearchQuery),
     );
-  }, [normalizedSearchQuery, result, showGenerateOnly, showSendOnly]);
+  }, [normalizedSearchQuery, result, showSendOnly]);
   const searchNavigation = useMemo(() => {
     let nextMatchIndex = 0;
     const entries = filteredEntries.map((entry) => {
@@ -523,7 +518,7 @@ export default function App() {
   const canNavigateSearchMatches = normalizedSearchQuery !== '' && totalMatchCount > 0;
   const boundedActiveMatchIndex = totalMatchCount === 0 ? 0 : Math.min(activeMatchIndex, totalMatchCount - 1);
   const visibleMatchCounter = canNavigateSearchMatches ? `${boundedActiveMatchIndex + 1} / ${totalMatchCount}` : `0 / ${totalMatchCount}`;
-  const hasEntries = (result?.entries.length ?? 0) > 0;
+  const hasEntries = summary.totalEntries > 0;
   const hasFilteredOutEntries = hasEntries && filteredEntries.length === 0;
   const selectedDateLabel = selectedDate === '' ? '날짜 없음' : getDisplayDate(selectedDate);
   const setMatchElement = useCallback((index: number, element: HTMLElement | null) => {
@@ -543,7 +538,7 @@ export default function App() {
 
   useEffect(() => {
     setActiveMatchIndex(0);
-  }, [filteredEntries, normalizedSearchQuery, selectedDate, showGenerateOnly, showSendOnly]);
+  }, [filteredEntries, normalizedSearchQuery, selectedDate, showSendOnly]);
 
   useEffect(() => {
     matchElementsRef.current.length = totalMatchCount;
@@ -566,17 +561,9 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>전송 로그</h1>
-          <p className="subtitle">목록 생성과 전송 기록을 날짜별로 확인합니다.</p>
+          <p className="subtitle">전송 기록을 날짜별로 확인합니다.</p>
         </div>
         <div className="topbar-controls" aria-label="로그 필터와 새로고침">
-          <label className="filter-check">
-            <input
-              type="checkbox"
-              checked={showGenerateOnly}
-              onChange={(event) => setShowGenerateOnly(event.currentTarget.checked)}
-            />
-            <span>목록생성만 보기</span>
-          </label>
           <label className="filter-check">
             <input type="checkbox" checked={showSendOnly} onChange={(event) => setShowSendOnly(event.currentTarget.checked)} />
             <span>전송한것만 보기</span>
@@ -649,7 +636,6 @@ export default function App() {
             </div>
             <div className="summary-grid" aria-label="로그 요약">
               <span><strong>{summary.totalEntries}</strong>건</span>
-              <span><strong>{summary.generateCount}</strong>생성</span>
               <span><strong>{summary.sendCount}</strong>전송</span>
               <span><strong>{summary.totalFiles}</strong>파일</span>
               <span><strong>{summary.hostCount}</strong>호스트</span>
@@ -661,8 +647,8 @@ export default function App() {
           {!isLoadingEntries && entriesError === '' && selectedDate === '' && (
             <p className="empty-panel">왼쪽에서 날짜를 선택하세요.</p>
           )}
-          {!isLoadingEntries && entriesError === '' && selectedDate !== '' && result?.entries.length === 0 && (
-            <p className="empty-panel">이 날짜의 로그 파일은 비어 있습니다.</p>
+          {!isLoadingEntries && entriesError === '' && selectedDate !== '' && result && summary.totalEntries === 0 && (
+            <p className="empty-panel">이 날짜의 전송 로그가 없습니다.</p>
           )}
           {!isLoadingEntries && entriesError === '' && hasFilteredOutEntries && (
             <p className="empty-panel">선택한 필터와 검색어에 맞는 로그가 없습니다.</p>

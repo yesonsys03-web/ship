@@ -79,6 +79,15 @@ function getLabelDateParts(label: string, yearContext?: string) {
   const yearLastDate = label.match(/(?:^|_)(\d{2})(\d{2})_(\d{4})(?:_|$)/);
 
   if (!yearLastDate) {
+    const shortYearFirstDate = label.match(/^(\d{2})(\d{2})(\d{2})$/);
+    if (shortYearFirstDate) {
+      const [, shortYear, month, day] = shortYearFirstDate;
+      const baseYear = yearContext === undefined ? new Date().getFullYear() : Number(yearContext);
+      const century = baseYear - (baseYear % 100);
+      const year = String(century + Number(shortYear));
+      return isValidDateParts(year, month, day) ? makeSummaryDateParts(year, month, day) : undefined;
+    }
+
     const bareDate = label.match(/^(\d{2})(\d{2})$/);
     if (!bareDate || yearContext === undefined) {
       return undefined;

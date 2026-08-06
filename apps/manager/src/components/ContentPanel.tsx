@@ -296,12 +296,26 @@ function getFolderInlineSummary(row: TreeRow) {
 function getDateFromLabel(value: string, yearContext: number | null = null) {
   const yearFirstDate = value.match(/(?:^|_)(\d{4})_(\d{2})(\d{2})(?:_|$)/);
   if (yearFirstDate) {
-    return yearFirstDate[0].replace(/^_/, '').replace(/_$/, '');
+    return `${yearFirstDate[1]}_${yearFirstDate[2]}${yearFirstDate[3]}`;
   }
 
   const yearLastDate = value.match(/(?:^|_)(\d{2})(\d{2})_(\d{4})(?:_|$)/);
   if (yearLastDate) {
-    return yearLastDate[0].replace(/^_/, '').replace(/_$/, '');
+    return `${yearLastDate[3]}_${yearLastDate[1]}${yearLastDate[2]}`;
+  }
+
+  const shortYearFirstDate = value.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (shortYearFirstDate) {
+    const baseYear = yearContext ?? new Date().getFullYear();
+    const century = baseYear - (baseYear % 100);
+    const year = century + Number(shortYearFirstDate[1]);
+    const month = Number(shortYearFirstDate[2]);
+    const day = Number(shortYearFirstDate[3]);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return '';
+    }
+    return `${year}_${shortYearFirstDate[2]}${shortYearFirstDate[3]}`;
   }
 
   const bareDate = value.match(/^(\d{2})(\d{2})$/);

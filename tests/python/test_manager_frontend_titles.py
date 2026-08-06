@@ -491,6 +491,17 @@ def test_manager_frontend_scene_validation_pills_use_green_and_red_tokens() -> N
     assert "background: var(--scene-missing-bg)" in missing_rule
 
 
+def test_manager_frontend_canonicalizes_short_year_shipment_date_labels() -> None:
+    app_source = read_source("App.tsx")
+    content_source = read_source("components/ContentPanel.tsx")
+
+    assert "const shortYearFirstDate = label.match(/^(\\d{2})(\\d{2})(\\d{2})$/);" in app_source
+    assert "century + Number(shortYear)" in app_source
+    assert "const shortYearFirstDate = value.match(/^(\\d{2})(\\d{2})(\\d{2})$/);" in content_source
+    assert "return `${year}_${shortYearFirstDate[2]}${shortYearFirstDate[3]}`;" in content_source
+    assert "return `${yearLastDate[3]}_${yearLastDate[1]}${yearLastDate[2]}`;" in content_source
+
+
 def test_manager_frontend_uses_fast_manifest_cache_without_scene_validation() -> None:
     api_source = read_source("api.ts")
     app_source = read_source("App.tsx")

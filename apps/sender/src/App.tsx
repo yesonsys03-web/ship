@@ -482,6 +482,13 @@ function getDateFromLabel(value: string, yearContext: number | null = null): Fol
     return createFolderDate(Number(yearLastMatch[3]), Number(yearLastMatch[1]), Number(yearLastMatch[2]));
   }
 
+  const shortYearFirstMatch = value.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (shortYearFirstMatch) {
+    const baseYear = yearContext ?? currentYear;
+    const century = baseYear - (baseYear % 100);
+    return createFolderDate(century + Number(shortYearFirstMatch[1]), Number(shortYearFirstMatch[2]), Number(shortYearFirstMatch[3]));
+  }
+
   const bareDateMatch = value.match(/^(\d{2})(\d{2})$/);
   if (bareDateMatch && yearContext !== null) {
     return createFolderDate(yearContext, Number(bareDateMatch[1]), Number(bareDateMatch[2]));
@@ -496,12 +503,7 @@ function getDateLabelFromLabel(value: string, yearContext: number | null = null)
     return '';
   }
 
-  if (/^\d{4}$/.test(value)) {
-    return `${folderDate.year}_${padDatePart(folderDate.month)}${padDatePart(folderDate.day)}`;
-  }
-
-  const dateMatch = value.match(/(?:^|_)(?:\d{4}_\d{2}\d{2}|\d{2}\d{2}_\d{4})(?:_|$)/);
-  return dateMatch?.[0].replace(/^_/, '').replace(/_$/, '') ?? '';
+  return `${folderDate.year}_${padDatePart(folderDate.month)}${padDatePart(folderDate.day)}`;
 }
 
 function getDateFromPath(path: string, yearContext: number | null = null): FolderDate | null {

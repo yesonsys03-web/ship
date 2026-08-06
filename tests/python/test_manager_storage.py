@@ -70,6 +70,26 @@ def test_storage_lists_latest_transfer_before_newer_source_date(tmp_path: Path) 
     assert first_shipment["sent_at"] is not None
 
 
+def test_storage_canonicalizes_short_year_first_source_date(tmp_path: Path) -> None:
+    storage = ShipmentStorage(tmp_path)
+    manifest = ShipmentManifest(
+        id="ship-short-year-source-date",
+        source_path="/Users/example/Desktop/Hazbin/260703/HH0305",
+        folder_name="HH0305",
+        created_at=datetime(2026, 6, 29, 9, 30, tzinfo=timezone.utc).isoformat(),
+        files=[FileEntry(path="HH0305_010.mov", size=12, is_dir=False)],
+    )
+
+    storage.save(manifest.to_dict())
+
+    tree = storage.list_tree()
+    shipment = tree["years"][0]["months"][0]["shipments"][0]
+
+    assert tree["years"][0]["year"] == "2026"
+    assert tree["years"][0]["months"][0]["month"] == "07"
+    assert shipment["day"] == "03"
+
+
 def test_storage_summary_file_count_excludes_folders(tmp_path: Path) -> None:
     storage = ShipmentStorage(tmp_path)
     manifest = ShipmentManifest(

@@ -460,6 +460,26 @@ def test_send_groups_shared_db_by_year_first_folder_label_date(monkeypatch, tmp_
     assert tree["years"][0]["months"][0]["shipments"][0]["day"] == "03"
 
 
+def test_send_groups_shared_db_by_short_year_first_folder_label_date(monkeypatch, tmp_path: Path) -> None:
+    manifest = ShipmentManifest(
+        id="ship-short-year-first-folder-date",
+        source_path="/tmp/Hazbin/260703/HH0305",
+        folder_name="HH0305",
+        created_at=datetime(2026, 6, 15, tzinfo=timezone.utc).isoformat(),
+        files=[],
+    )
+
+    monkeypatch.setenv("SHIP_DB_DIR", str(tmp_path))
+
+    service.send(manifest.to_dict())
+
+    tree = service.ShipmentDatabase(service.resolve_ship_db_file()).list_tree()
+
+    assert tree["years"][0]["year"] == "2026"
+    assert tree["years"][0]["months"][0]["month"] == "07"
+    assert tree["years"][0]["months"][0]["shipments"][0]["day"] == "03"
+
+
 def test_send_groups_shared_db_by_bare_mmdd_with_created_at_year(monkeypatch, tmp_path: Path) -> None:
     manifest = ShipmentManifest(
         id="ship-bare-folder-date",

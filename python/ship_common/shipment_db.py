@@ -45,6 +45,15 @@ def _date_from_label(value: str, year_context: int | None = None) -> tuple[int, 
         day = int(year_last.group(2))
         return (year, month, day) if _is_valid_date(year, month, day) else None
 
+    short_year_first = re.fullmatch(r"(\d{2})(\d{2})(\d{2})", value)
+    if short_year_first:
+        base_year = year_context if year_context is not None else 2000
+        century = base_year - base_year % 100
+        year = century + int(short_year_first.group(1))
+        month = int(short_year_first.group(2))
+        day = int(short_year_first.group(3))
+        return (year, month, day) if _is_valid_date(year, month, day) else None
+
     bare_month_day = re.fullmatch(r"(\d{2})(\d{2})", value)
     if bare_month_day and year_context is not None:
         month = int(bare_month_day.group(1))

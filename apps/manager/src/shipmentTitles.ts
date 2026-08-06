@@ -17,6 +17,18 @@ function getHazbinEpisode(value: string) {
   return value.match(/HH_(\d+)(?=\D|$)/i)?.[1] ?? value.match(/HH0?(\d{3})(?=\D|$)/i)?.[1];
 }
 
+function getHazbinEpisodesFromValue(value: string) {
+  return getPathSegments(value).map(getHazbinEpisode).filter((episode): episode is string => episode !== undefined);
+}
+
+function getUniqueValues(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+function formatHazbinEpisodeTitle(episodes: string[]) {
+  return ['헤즈빈호텔', episodes.map((episode) => `${episode}화`).join('/')].filter(Boolean).join(' ');
+}
+
 function getFloridaEpisode(value: string) {
   return value.match(/FL_(\d+)(?=\D|$)/i)?.[1] ?? value.match(/FL0?(\d{3})(?=\D|$)/i)?.[1];
 }
@@ -201,6 +213,10 @@ export function getManifestDisplayTitle(manifest: ShipmentManifest) {
   }
 
   const mappedTitles = sources.map(getMappedWorkTitle).filter((title) => title !== '');
+  const hazbinEpisodes = getUniqueValues(sources.flatMap(getHazbinEpisodesFromValue));
+  if (hazbinEpisodes.length > 1) {
+    return formatHazbinEpisodeTitle(hazbinEpisodes);
+  }
   const mappedTitle = mappedTitles.find((title) => /^헤즈빈호텔 \d+화$/.test(title))
     ?? mappedTitles.find((title) => /^킹오브더힐 (?:15|16)/.test(title))
     ?? mappedTitles[0];

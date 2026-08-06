@@ -49,6 +49,17 @@ def test_manager_frontend_uses_manifest_cache_for_navigation_titles_after_detail
     assert "getManifestDisplayTitle(manifest)" in title_source
 
 
+def test_manager_frontend_hazbin_mixed_episode_manifest_displays_all_episode_titles() -> None:
+    title_source = read_source("shipmentTitles.ts")
+    manifest_title_body = title_source.split("export function getManifestDisplayTitle", 1)[1].split("function normalizeSummaryLabel", 1)[0]
+
+    assert "function getHazbinEpisodesFromValue" in title_source
+    assert "function formatHazbinEpisodeTitle" in title_source
+    assert "const hazbinEpisodes = getUniqueValues(sources.flatMap(getHazbinEpisodesFromValue));" in manifest_title_body
+    assert "return formatHazbinEpisodeTitle(hazbinEpisodes);" in manifest_title_body
+    assert "`${episode}화`" in title_source
+
+
 def test_manager_frontend_fl_files_inside_date_folders_display_as_florida() -> None:
     title_source = read_source("shipmentTitles.ts")
     mapped_title_body = title_source.split("function getMappedWorkTitle", 1)[1].split("export function getDisplayFolderName", 1)[0]

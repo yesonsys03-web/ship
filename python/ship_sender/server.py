@@ -16,7 +16,7 @@ from .config import SENDER_ALLOWED_ORIGINS, SENDER_HOST, SENDER_MAX_REQUEST_BYTE
 from .service import bobs_job, bobs_jobs, db_status, log_generate, log_startup_db_diagnostic, parse_bobs_pdf, scan, send, sent_history
 from ship_common.db_path import resolve_ship_db_file
 from ship_common.shipment_db import ShipmentDatabase
-from ship_common.thumbnails import get_design_placeholder_thumbnail_bytes, get_thumbnail_bytes
+from ship_common.thumbnails import get_design_placeholder_thumbnail_bytes, get_thumbnail_bytes, is_design_placeholder_thumbnail_bytes
 
 
 class SenderHandler(BaseHTTPRequestHandler):
@@ -52,9 +52,17 @@ class SenderHandler(BaseHTTPRequestHandler):
                 query = parse_qs(parsed_path.query)
                 file_path = _required_query_value(query, "file_path")
                 shipment_id = _optional_query_value(query, "shipment_id")
+                source_path = _optional_query_value(query, "source_path")
                 thumbnail = get_persisted_thumbnail_bytes(shipment_id, file_path) if shipment_id else None
+                if thumbnail is not None and source_path and _should_refresh_persisted_thumbnail(file_path, thumbnail):
+                    try:
+                        refreshed_thumbnail = get_thumbnail_bytes(source_path, file_path)
+                    except (FileNotFoundError, RuntimeError):
+                        refreshed_thumbnail = None
+                    if refreshed_thumbnail is not None:
+                        thumbnail = refreshed_thumbnail
+                        save_persisted_thumbnail_bytes(shipment_id, file_path, thumbnail)
                 if thumbnail is None:
-                    source_path = _optional_query_value(query, "source_path")
                     if source_path:
                         try:
                             thumbnail = get_thumbnail_bytes(source_path, file_path)
@@ -170,6 +178,10 @@ def _required_query_value(query: Dict[str, list[str]], key: str) -> str:
 
 def _optional_query_value(query: Dict[str, list[str]], key: str) -> str:
     return query.get(key, [""])[0]
+
+
+def _should_refresh_persisted_thumbnail(file_path: str, thumbnail: bytes) -> bool:
+    return file_path.lower().endswith((".psd", ".psb")) and is_design_placeholder_thumbnail_bytes(thumbnail)
 
 
 def _optional_payload_paths(value: Any) -> str | list[str] | None:

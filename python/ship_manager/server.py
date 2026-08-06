@@ -16,7 +16,7 @@ from .config import MANAGER_ALLOWED_ORIGINS, MANAGER_HOST, MANAGER_MAX_REQUEST_B
 from .service import get_shipment, list_shipments, receive
 from ship_common.db_path import resolve_ship_db_file
 from ship_common.shipment_db import ShipmentDatabase
-from ship_common.thumbnails import get_thumbnail_bytes
+from ship_common.thumbnails import get_thumbnail_bytes, is_design_placeholder_thumbnail_bytes
 
 
 class ManagerHandler(BaseHTTPRequestHandler):
@@ -37,7 +37,16 @@ class ManagerHandler(BaseHTTPRequestHandler):
                     query = parse_qs(parsed_path.query)
                     file_path = _required_query_value(query, "file_path")
                     shipment_id = _optional_query_value(query, "shipment_id")
+                    source_path = _optional_query_value(query, "source_path")
                     thumbnail = get_persisted_thumbnail_bytes(shipment_id, file_path) if shipment_id else None
+                    if thumbnail is not None and source_path and _should_refresh_persisted_thumbnail(file_path, thumbnail):
+                        try:
+                            refreshed_thumbnail = get_thumbnail_bytes(source_path, file_path)
+                        except (FileNotFoundError, RuntimeError):
+                            refreshed_thumbnail = None
+                        if refreshed_thumbnail is not None:
+                            thumbnail = refreshed_thumbnail
+                            save_persisted_thumbnail_bytes(shipment_id, file_path, thumbnail)
                     if thumbnail is None:
                         thumbnail = get_thumbnail_bytes(_required_query_value(query, "source_path"), file_path)
                         if shipment_id:
@@ -132,6 +141,10 @@ def _required_query_value(query: Dict[str, list[str]], key: str) -> str:
 
 def _optional_query_value(query: Dict[str, list[str]], key: str) -> str:
     return query.get(key, [""])[0]
+
+
+def _should_refresh_persisted_thumbnail(file_path: str, thumbnail: bytes) -> bool:
+    return file_path.lower().endswith((".psd", ".psb")) and is_design_placeholder_thumbnail_bytes(thumbnail)
 
 
 def get_persisted_thumbnail_bytes(shipment_id: str, file_path: str) -> bytes | None:

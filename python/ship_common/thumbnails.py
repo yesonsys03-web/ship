@@ -81,6 +81,10 @@ def get_design_placeholder_thumbnail_bytes(file_path: str) -> bytes:
         return output_path.read_bytes()
 
 
+def is_design_placeholder_thumbnail_bytes(thumbnail: bytes) -> bool:
+    return thumbnail.startswith(PNG_SIGNATURE) and b"SHIP design thumbnail fallback" in thumbnail
+
+
 def _generate_design_thumbnail(target: Path, output_root: Path, failures: list[str]) -> Path:
     try:
         return _generate_psd_tools_thumbnail(target, output_root / "psd-tools")

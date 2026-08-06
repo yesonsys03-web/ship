@@ -261,3 +261,49 @@ def test_thumbnail_route_prefers_persisted_png_without_source_path(
     assert sent["content_type"] == "image/png"
     assert sent["status"] == 200
     assert sent["json"] is None
+
+
+@pytest.mark.parametrize(
+    ("server_module", "handler_class_name"),
+    [
+        (sender_server, "SenderHandler"),
+        (manager_server, "ManagerHandler"),
+    ],
+)
+def test_thumbnail_route_regenerates_design_placeholder_when_source_path_is_available(
+    monkeypatch: pytest.MonkeyPatch,
+    server_module,
+    handler_class_name: str,
+) -> None:
+    handler_class = getattr(server_module, handler_class_name)
+    handler = object.__new__(handler_class)
+    handler.path = "/thumbnail?shipment_id=legacy-psd&source_path=/source&file_path=poster.psd"
+    handler.headers = SimpleNamespace(get=lambda key, default=None: default)
+    handler.client_address = ("127.0.0.1", 12345)
+    generated_png = PNG_SIGNATURE + b"real-psd-preview"
+    persisted_placeholder = PNG_SIGNATURE + b"SHIP design thumbnail fallback"
+    saved = []
+
+    sent = {"bytes": None, "content_type": None, "status": None, "json": None}
+
+    def fake_send_bytes(self, body: bytes, content_type: str, status: int = 200) -> None:
+        sent["bytes"] = body
+        sent["content_type"] = content_type
+        sent["status"] = status
+
+    def fake_send_json(self, payload, status: int = 200) -> None:
+        sent["json"] = (payload, status)
+
+    monkeypatch.setattr(server_module, "get_persisted_thumbnail_bytes", lambda shipment_id, file_path: persisted_placeholder)
+    monkeypatch.setattr(server_module, "get_thumbnail_bytes", lambda source_path, file_path: generated_png)
+    monkeypatch.setattr(server_module, "save_persisted_thumbnail_bytes", lambda shipment_id, file_path, thumbnail: saved.append((shipment_id, file_path, thumbnail)) or True)
+    monkeypatch.setattr(handler_class, "_send_bytes", fake_send_bytes)
+    monkeypatch.setattr(handler_class, "_send_json", fake_send_json)
+
+    handler_class.do_GET(handler)
+
+    assert sent["bytes"] == generated_png
+    assert sent["content_type"] == "image/png"
+    assert sent["status"] == 200
+    assert sent["json"] is None
+    assert saved == [("legacy-psd", "poster.psd", generated_png)]

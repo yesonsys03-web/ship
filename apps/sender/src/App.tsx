@@ -319,6 +319,14 @@ function getHazbinEpisode(value: string) {
   return value.match(/HH_(\d+)(?=\D|$)/i)?.[1] ?? value.match(/HH0?(\d{3})(?=\D|$)/i)?.[1];
 }
 
+function getHazbinEpisodesFromValue(value: string) {
+  return getPathSegments(value).map(getHazbinEpisode).filter((episode): episode is string => episode !== undefined);
+}
+
+function formatHazbinEpisodeTitle(episodes: string[]) {
+  return ['헤즈빈호텔', episodes.map((episode) => `${episode}화`).join('/')].filter(Boolean).join(' ');
+}
+
 function getFloridaEpisode(value: string) {
   return value.match(/FL_(\d+)(?=\D|$)/i)?.[1] ?? value.match(/FL0?(\d{3})(?=\D|$)/i)?.[1];
 }
@@ -411,8 +419,13 @@ function getManifestDisplayTitles(manifest: ShipmentManifest) {
   }
 
   const sources = [manifest.folder_name, manifest.source_path, ...manifest.files.map((file) => file.path)];
+  const hazbinEpisodes = getUniqueValues(sources.flatMap(getHazbinEpisodesFromValue));
   const mappedTitles = sources.map(getDisplayFolderName).filter((title, index) => title !== sources[index]);
   const uniqueTitles = Array.from(new Set(mappedTitles));
+  if (hazbinEpisodes.length > 1) {
+    const hazbinTitle = formatHazbinEpisodeTitle(hazbinEpisodes);
+    return [hazbinTitle, ...uniqueTitles.filter((title) => title !== hazbinTitle)];
+  }
   const preferredTitle = uniqueTitles.find((title) => /^킹오브더힐 (?:15|16)/.test(title));
   return preferredTitle ? [preferredTitle, ...uniqueTitles.filter((title) => title !== preferredTitle)] : uniqueTitles.length > 0 ? uniqueTitles : [manifest.folder_name];
 }
@@ -584,6 +597,19 @@ function findChangedNormalRevisionSourceManifest(replacementManifest: ShipmentMa
     && getNormalRevisionMatchKey(manifest, yearContext) === replacementKey
     && getNormalRevisionContentSignature(manifest) !== replacementContentSignature
   )) ?? null;
+}
+
+function findSelectedChangedNormalRevisionSourceManifest(replacementManifest: ShipmentManifest, selectedManifest: ShipmentManifest | null, yearContext: number | null) {
+  if (selectedManifest === null || isBobsManifest(selectedManifest)) {
+    return null;
+  }
+  const replacementKey = getNormalRevisionMatchKey(replacementManifest, yearContext);
+  if (replacementKey === null || getNormalRevisionMatchKey(selectedManifest, yearContext) !== replacementKey) {
+    return null;
+  }
+  return getNormalRevisionContentSignature(selectedManifest) !== getNormalRevisionContentSignature(replacementManifest)
+    ? selectedManifest
+    : null;
 }
 
 function formatFolderDateLabel(folderDate: FolderDate) {
@@ -1863,13 +1889,13 @@ export default function App() {
     const selectedHistoryManifest = selectedHistoryManifestId
       ? sentHistoryRef.current.find((manifest) => manifest.id === selectedHistoryManifestId) ?? null
       : null;
-    const selectedNormalRevisionSourceManifest = selectedHistoryManifest && !isBobsManifest(selectedHistoryManifest) ? selectedHistoryManifest : null;
     setIsBusy(true);
     setStatus('폴더 내용을 읽고 있습니다.');
     try {
       const nextManifest = await scanFolder(path);
       clearBobsRetakePdfSelection();
       setPendingBobsRevisionManifestId(null);
+      const selectedNormalRevisionSourceManifest = findSelectedChangedNormalRevisionSourceManifest(nextManifest, selectedHistoryManifest, selectedYear);
       const detectedNormalRevisionSourceManifest = findChangedNormalRevisionSourceManifest(nextManifest, sentHistoryRef.current, selectedYear);
       const normalRevisionSourceManifest = selectedNormalRevisionSourceManifest ?? detectedNormalRevisionSourceManifest;
       if (normalRevisionSourceManifest) {
@@ -2266,7 +2292,10 @@ export default function App() {
                       type="button"
                     >
                       <strong className={getManifestWorkColorClassName(manifest)}>{getManifestDisplayTitle(manifest)}</strong>
-                      <span>{countFiles(manifest.files)}개 파일</span>
+                      <span className="queue-meta">
+                        {isActive && <span className="selection-badge">선택됨</span>}
+                        <span>{countFiles(manifest.files)}개 파일</span>
+                      </span>
                     </button>
                   );
                 })}
@@ -2374,6 +2403,7 @@ export default function App() {
                       {sourceDateFolderLabel && <span className="history-source-date">선적 날짜 {sourceDateFolderLabel}</span>}
                     </span>
                     <span className="history-meta">
+                      {isActive && <span className="selection-badge">선택됨</span>}
                       <span className="history-count">{countFiles(manifest.files)}개 파일</span>
                       <time dateTime={actualSentTimestamp}>{formatSentTimestamp(actualSentTimestamp)}</time>
                     </span>

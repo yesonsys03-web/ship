@@ -332,6 +332,17 @@ def test_sender_frontend_hazbin_date_folder_drop_uses_source_path_for_title() ->
     assert manifest_titles_body.index("return [getBobsManifestDisplayTitle(manifest)]") < manifest_titles_body.index("const sources = [manifest.folder_name, manifest.source_path")
 
 
+def test_sender_frontend_hazbin_mixed_episode_folder_displays_all_episode_titles() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    manifest_titles_body = app_source.split("function getManifestDisplayTitles", 1)[1].split("function getManifestDisplayTitle", 1)[0]
+
+    assert "function getHazbinEpisodesFromValue" in app_source
+    assert "function formatHazbinEpisodeTitle" in app_source
+    assert "const hazbinEpisodes = getUniqueValues(sources.flatMap(getHazbinEpisodesFromValue));" in manifest_titles_body
+    assert "formatHazbinEpisodeTitle(hazbinEpisodes)" in manifest_titles_body
+    assert "`${episode}화`" in app_source
+
+
 def test_sender_frontend_koth_promo_paths_display_specific_episode_title() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     display_folder_name_body = app_source.split("function getDisplayFolderName", 1)[1].split("function getManifestDisplayTitles", 1)[0]
@@ -394,6 +405,18 @@ def test_sender_frontend_work_background_classes_apply_to_list_and_file_containe
     assert '.history-item[class*="work-bg-"].is-new.active .history-count { color: var(--secondary-action); }' in styles_source
 
 
+def test_sender_frontend_marks_selected_rows_with_badge_and_strong_active_ring() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    styles_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "styles.css").read_text()
+    active_rule = get_css_rule(styles_source, ".queue-item.active, .history-item.active")
+
+    assert "selection-badge" in app_source
+    assert "선택됨" in app_source
+    assert "outline:" in active_rule
+    assert "box-shadow:" in active_rule
+    assert ".history-item.active::before" in styles_source
+
+
 def test_sender_frontend_bobs_mixed_tk_generation_does_not_lock_review_to_first_tk() -> None:
     app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
     auto_apply_body = app_source.split("const nextBobsManifests = autoBobsGeneratedQueue.manifests", 1)[1].split("}, [activeHistoryManifestId", 1)[0]
@@ -434,13 +457,25 @@ def test_sender_frontend_normal_revision_drop_detects_changed_same_date_title_hi
     assert "getNormalRevisionContentSignature(manifest) !== replacementContentSignature" in app_source
     assert "activeHistoryManifestIdRef.current" in handle_scan_body
     assert "sentHistoryRef.current" in handle_scan_body
+    assert "function findSelectedChangedNormalRevisionSourceManifest" in app_source
     assert "const detectedNormalRevisionSourceManifest = findChangedNormalRevisionSourceManifest(nextManifest, sentHistoryRef.current, selectedYear)" in handle_scan_body
+    assert "const selectedNormalRevisionSourceManifest = findSelectedChangedNormalRevisionSourceManifest(nextManifest, selectedHistoryManifest, selectedYear)" in handle_scan_body
     assert "const normalRevisionSourceManifest = selectedNormalRevisionSourceManifest ?? detectedNormalRevisionSourceManifest" in handle_scan_body
     assert "같은 선적 날짜/제목의 변경된 목록" in handle_scan_body
     assert "activeHistoryManifestIdRef.current = manifest.id" in select_history_body
     assert "handleDroppedPathRef.current(path, excelPaths)" in drop_listener_body
     assert "setPendingNormalRevisionManifestId(revisionManifest.id)" in handle_scan_body
     assert "setManifests([revisionManifest])" in handle_scan_body
+
+
+def test_sender_frontend_selected_history_revision_requires_same_date_title_and_changed_content() -> None:
+    app_source = (Path(__file__).parents[2] / "apps" / "sender" / "src" / "App.tsx").read_text()
+    selected_match_body = app_source.split("function findSelectedChangedNormalRevisionSourceManifest", 1)[1].split("function formatFolderDateLabel", 1)[0]
+
+    assert "selectedManifest: ShipmentManifest | null" in selected_match_body
+    assert "getNormalRevisionMatchKey(selectedManifest, yearContext) !== replacementKey" in selected_match_body
+    assert "return getNormalRevisionContentSignature(selectedManifest) !== getNormalRevisionContentSignature(replacementManifest)" in selected_match_body
+    assert "? selectedManifest" in selected_match_body
 
 
 def test_sender_frontend_history_active_row_uses_selected_id_directly() -> None:

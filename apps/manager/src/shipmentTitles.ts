@@ -116,7 +116,7 @@ function buildBobsDisplayTitle(title: string, jobLabel: string, labelLabel: stri
 }
 
 function isDateFolderName(name: string) {
-  return /^(?:\d{4}_\d{4}|\d{4}_\d{2}\d{2}|\d{2}\d{2}_\d{4}|\d{4})$/.test(name);
+  return /^(?:\d{4}_\d{4}|\d{4}_\d{2}\d{2}|\d{2}\d{2}_\d{4}|\d{6}|\d{4})$/.test(name);
 }
 
 function getMappedWorkTitle(value: string) {

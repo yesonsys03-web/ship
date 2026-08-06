@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 
@@ -553,6 +554,19 @@ def test_manager_frontend_prefetches_only_date_folder_navigation_titles_without_
     assert "await getShipment(id, { includeSceneValidation: false })" in navigation_cache_body
     assert "return isDateFolderName(summary.label)" in title_source
     assert "getDisplayFolderName(summary.label) === '밥스버거'" not in title_source
+
+
+def test_manager_frontend_prefetches_short_year_date_folder_navigation_titles() -> None:
+    title_source = read_source("shipmentTitles.ts")
+    date_folder_body = title_source.split("function isDateFolderName", 1)[1].split("function getMappedWorkTitle", 1)[0]
+    navigation_cache_body = title_source.split("export function shouldLoadManifestForNavigation", 1)[1]
+    date_folder_pattern = date_folder_body.split("return /", 1)[1].split("/.test(name)", 1)[0]
+
+    assert re.fullmatch(date_folder_pattern, "260804")
+    assert re.fullmatch(date_folder_pattern, "0804")
+    assert re.fullmatch(date_folder_pattern, "2026_0804")
+    assert re.fullmatch(date_folder_pattern, "0804_2026")
+    assert "return isDateFolderName(summary.label)" in navigation_cache_body
 
 
 def test_manager_frontend_keeps_informative_bobs_summary_before_manifest_cache() -> None:

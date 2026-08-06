@@ -84,3 +84,15 @@ def test_log_viewer_labels_revision_sends() -> None:
     source = read_source("App.tsx")
 
     assert "수정 전송" in source
+
+
+def test_log_viewer_displays_canonical_shipment_date_from_source_folder() -> None:
+    source = read_source("App.tsx")
+    search_values_body = source.split("function getEntrySearchValues", 1)[1].split("function getEntryVisibleTextValues", 1)[0]
+    entry_card_body = source.split("function EntryCard", 1)[1].split("export default function App", 1)[0]
+
+    assert "function getEntryShipmentDateLabel" in source
+    assert "const shortYearFirstMatch = value.match(/^(\\d{2})(\\d{2})(\\d{2})$/);" in source
+    assert "return `${folderDate.year}_${padDatePart(folderDate.month)}${padDatePart(folderDate.day)}`" in source
+    assert "shipmentDateLabel" in search_values_body
+    assert "<DetailRow label=\"선적 날짜\" value={shipmentDateLabel}" in entry_card_body

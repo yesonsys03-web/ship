@@ -26,6 +26,12 @@ type SearchHighlightNavigation = {
   setMatchElement: (index: number, element: HTMLElement | null) => void;
 };
 
+type FolderDate = {
+  year: number;
+  month: number;
+  day: number;
+};
+
 function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message.trim() !== '') {
     return error.message;
@@ -62,6 +68,77 @@ function getActionLabel(action: string | undefined) {
 
 function getPathSegments(path: string) {
   return path.split(/[\\/]+/).filter(Boolean);
+}
+
+function padDatePart(value: number) {
+  return value.toString().padStart(2, '0');
+}
+
+function isValidFolderDate(year: number, month: number, day: number) {
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function createFolderDate(year: number, month: number, day: number): FolderDate | null {
+  return isValidFolderDate(year, month, day) ? { year, month, day } : null;
+}
+
+function getYearFromTimestamp(value: string | undefined) {
+  if (!isPresent(value)) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.getFullYear();
+}
+
+function getDateFromLabel(value: string, yearContext: number | null = null): FolderDate | null {
+  const yearFirstMatch = value.match(/(?:^|_)(\d{4})_(\d{2})(\d{2})(?:_|$)/);
+  if (yearFirstMatch) {
+    return createFolderDate(Number(yearFirstMatch[1]), Number(yearFirstMatch[2]), Number(yearFirstMatch[3]));
+  }
+
+  const yearLastMatch = value.match(/(?:^|_)(\d{2})(\d{2})_(\d{4})(?:_|$)/);
+  if (yearLastMatch) {
+    return createFolderDate(Number(yearLastMatch[3]), Number(yearLastMatch[1]), Number(yearLastMatch[2]));
+  }
+
+  const shortYearFirstMatch = value.match(/^(\d{2})(\d{2})(\d{2})$/);
+  if (shortYearFirstMatch) {
+    const baseYear = yearContext ?? new Date().getFullYear();
+    const century = baseYear - (baseYear % 100);
+    return createFolderDate(century + Number(shortYearFirstMatch[1]), Number(shortYearFirstMatch[2]), Number(shortYearFirstMatch[3]));
+  }
+
+  const bareDateMatch = value.match(/^(\d{2})(\d{2})$/);
+  if (bareDateMatch && yearContext !== null) {
+    return createFolderDate(yearContext, Number(bareDateMatch[1]), Number(bareDateMatch[2]));
+  }
+
+  return null;
+}
+
+function getDateLabelFromPath(path: string, yearContext: number | null = null) {
+  const segments = getPathSegments(path);
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const folderDate = getDateFromLabel(segments[index], yearContext);
+    if (folderDate) {
+      return `${folderDate.year}_${padDatePart(folderDate.month)}${padDatePart(folderDate.day)}`;
+    }
+  }
+  const folderDate = getDateFromLabel(path, yearContext);
+  return folderDate ? `${folderDate.year}_${padDatePart(folderDate.month)}${padDatePart(folderDate.day)}` : '';
+}
+
+function getEntryShipmentDateLabel(entry: AuditLogEntry) {
+  const yearContext = getYearFromTimestamp(entry.timestamp) ?? getYearFromTimestamp(entry.date);
+  const sources = [entry.source_path, entry.folder_name, ...(entry.files ?? [])].filter((value): value is string => isPresent(value));
+  for (const source of sources) {
+    const dateLabel = getDateLabelFromPath(source, yearContext);
+    if (dateLabel !== '') {
+      return dateLabel;
+    }
+  }
+  return '';
 }
 
 function getHazbinEpisode(value: string) {
@@ -273,6 +350,7 @@ function getEntrySearchValues(entry: AuditLogEntry) {
   const fileCount = entry.file_count;
   const actionLabel = getActionLabel(entry.action);
   const contentValues = getEntryContentValues(entry);
+  const shipmentDateLabel = getEntryShipmentDateLabel(entry);
   return [
     actionLabel,
     actionLabel.replace(/\s+/g, ''),
@@ -282,6 +360,7 @@ function getEntrySearchValues(entry: AuditLogEntry) {
     entry.folder_name ?? '',
     entry.manifest_id ?? '',
     entry.source_path ?? '',
+    shipmentDateLabel,
     getHostLabel(entry),
     entry.hostname ?? '',
     entry.ip ?? '',
@@ -304,10 +383,12 @@ function getEntrySearchValues(entry: AuditLogEntry) {
 }
 
 function getEntryVisibleTextValues(entry: AuditLogEntry) {
+  const shipmentDateLabel = getEntryShipmentDateLabel(entry);
   return [
     getActionLabel(entry.action),
     getEntryTitle(entry),
     formatTimestamp(entry.timestamp),
+    shipmentDateLabel,
     ...getMetaItems(entry),
     getHostLabel(entry),
     ...getEntryContentValues(entry),
@@ -437,6 +518,7 @@ function EntryCard({
   const actionLabel = getActionLabel(entry.action);
   const title = getEntryTitle(entry);
   const timestamp = formatTimestamp(entry.timestamp);
+  const shipmentDateLabel = getEntryShipmentDateLabel(entry);
   const contentValues = getEntryContentValues(entry);
   const normalizedQuery = normalizeSearchValue(query);
   let nextMatchStartIndex = matchStartIndex;
@@ -464,6 +546,7 @@ function EntryCard({
       )}
       <dl className="detail-grid">
         <DetailRow label="호스트/IP" value={getHostLabel(entry)} renderValue={renderHighlightedValue} />
+        <DetailRow label="선적 날짜" value={shipmentDateLabel} renderValue={renderHighlightedValue} />
         <DetailListRow label="내용" values={contentValues} renderValue={renderHighlightedValue} />
         <DetailRow label="경로" value={entry.source_path} renderValue={renderHighlightedValue} />
         <DetailRow label="메모" value={entry.note} renderValue={renderHighlightedValue} />
